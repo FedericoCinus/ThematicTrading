@@ -14,3 +14,18 @@ wheels/
 
 # Local data (large raw files — not for version control)
 data/
+
+# Binary documents
+*.pdf
+*.png
+
+# LaTeX build artifacts
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
