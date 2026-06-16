@@ -36,3 +36,4 @@ data/
 *.parquet
 *.zip
 *.html
+*.npy
