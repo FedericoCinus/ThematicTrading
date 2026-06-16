@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# Secrets / environment variables
+.env
+.env.*
+
 # macOS
 .DS_Store
 
@@ -29,3 +33,4 @@ data/
 *.snm
 *.synctex.gz
 *.toc
+*.parquet
