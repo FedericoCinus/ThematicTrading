@@ -1,0 +1,443 @@
+\documentclass[11pt]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+
+% --- Notation macros ---
+\newcommand{\ind}[1]{\mathbf{1}\!\left[#1\right]}        % indicator
+\newcommand{\Terms}{\mathcal{T}}                          % term set of a doc
+\newcommand{\Vocab}{\mathcal{V}}                          % term vocabulary
+\newcommand{\Base}{\mathcal{V}_{B}}                       % baseline vocabulary
+\newcommand{\Ent}{\mathcal{E}}                            % NER entity vocabulary
+\newcommand{\Wset}{\mathcal{W}}                           % discovery weeks
+\newcommand{\Gw}{G_{w}}                                   % docs in week w
+\renewcommand{\deg}{\delta}                               % reach / degree
+\newcommand{\clu}{\gamma}                                 % clustering
+\newcommand{\Rtab}{\mathsf{R}}
+\newcommand{\Ptab}{\mathsf{P}}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+\title{\textbf{Entity Emergence Detection}\\[2pt]
+\large A graph-topological pipeline for early thematic detection from news headlines}
+\author{Thematic Trading research}
+\date{Notebook \texttt{0.20-genai-entity-emergence-ner}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We formalise the pipeline that turns a stream of dated news headlines into a short list
+of candidate investment \emph{themes}, and derive the mathematical reasons each stage
+works. The pipeline is a \emph{high-recall-then-high-precision cascade}: a novelty filter
+isolates newly emerging entity names, a weekly co-occurrence graph scores each entity by
+two structural quantities (its \emph{reach} and its \emph{clustering}), a temporal rule
+keeps only entities that persist, grow, and keep bridging unrelated stories, and a final
+language-model pass removes the residual non-themes. The central idea is that a
+\emph{theme} and an \emph{event} have opposite graph topologies: a theme is a low-clustering
+hub that brokers across disconnected communities, an event is a high-clustering clique.
+On the generative-AI benchmark the pipeline catches \texttt{chatgpt} in the week of
+3--9 January 2023 and promotes it the week of 17--23 January 2023, roughly four months
+ahead of the corresponding thematic ETF inception.
+\end{abstract}
+
+% =====================================================================
+\section{Data model and notation}
+% =====================================================================
+
+The input is a corpus of headlines. Each headline (document) $d$ carries a timestamp
+$\tau(d)$ and a set of multi-word \emph{terms} $\Terms(d)\subseteq\Vocab$, extracted upstream
+(noun-phrase / key-term extraction). We write $\mathrm{tok}(t)$ for the word tokens of a
+term $t$.
+
+\paragraph{Time windows.}
+Fix a baseline cutoff $t_0$ and a discovery interval $[t_1,t_2]$. In the notebook,
+\[
+t_0 = \text{2022-09-30},\qquad [t_1,t_2] = [\text{2022-10-01},\,\text{2023-02-28}].
+\]
+The baseline window is $B=\{d:\tau(d)\le t_0\}$. Time is bucketed into ISO weeks
+($\texttt{W-MON}$); let $\Wset$ be the set of discovery weeks and $\Gw=\{d:\,\text{week}(d)=w\}$
+the documents in week $w$.
+
+\paragraph{Per-week statistics.}
+For a term $t$ and week $w$ define the \emph{support} (mention count) and, for a pair $(a,b)$,
+the \emph{co-occurrence count}
+\begin{equation}
+c_w(t)=\sum_{d\in\Gw}\ind{t\in\Terms(d)},\qquad
+A_w(a,b)=\sum_{d\in\Gw}\ind{a\in\Terms(d)\ \wedge\ b\in\Terms(d)},\quad a\ne b.
+\label{eq:counts}
+\end{equation}
+$A_w$ is the (symmetric, weighted) adjacency of the \emph{weekly co-occurrence graph}
+$\mathcal{G}_w=(\Vocab_w,\,\{(a,b):A_w(a,b)>0\})$, whose nodes are the terms occurring that
+week and whose edges join terms that share a headline.
+
+\paragraph{Two tables flow through the pipeline.}
+\begin{itemize}[leftmargin=1.4em]
+  \item $\Rtab$, the \emph{detection table}: one row per $(\text{novel entity},\,\text{week})$,
+        carrying $c_w$, reach $\deg_w$, clustering $\clu_w$, the local subgraph, and
+        representative headlines.
+  \item $\Ptab$, the \emph{per-entity lifecycle}: one row per caught entity, collapsing its
+        weeks into \texttt{first\_caught}, \texttt{n\_weeks}, $\deg_{\max}$, median clustering,
+        and a \texttt{promoted\_week}.
+\end{itemize}
+
+% =====================================================================
+\section{Pipeline overview}
+% =====================================================================
+
+The pipeline is a sequence of monotonically shrinking sets. With the notebook's parameters
+the funnel is
+\[
+\underbrace{3{,}767}_{\text{novel entities}}\ \longrightarrow\
+\underbrace{814}_{\text{caught}}\ \longrightarrow\
+\underbrace{20}_{\text{promoted}}\ \longrightarrow\
+\underbrace{18}_{\text{themes}}\ \longrightarrow\
+\underbrace{4}_{\text{LLM-kept}}.
+\]
+The stages are:
+\begin{description}[leftmargin=2.2em,style=nextline]
+  \item[Stage 0 -- entity selection.] Keep terms that name an entity (\S\ref{sec:stage0}).
+  \item[Stage 1 -- novelty + support.] Keep terms absent from the baseline and seen
+        $\ge m$ times that week (\S\ref{sec:stage1}).
+  \item[Stage 2 -- graph features.] Score each surviving entity by reach $\deg_w$ and
+        clustering $\clu_w$ (\S\ref{sec:stage2}). These three stages build $\Rtab$.
+  \item[Stage 3 -- catch then promote.] Flag entity-weeks with enough reach
+        (\emph{catch}), then keep entities that persist, grow, and stay bridges
+        (\emph{promote}). This builds $\Ptab$ (\S\ref{sec:stage3}).
+  \item[Stage 4 -- assemble.] Merge co-occurring promoted entities into themes
+        (\S\ref{sec:stage4}).
+  \item[Stage 5 -- LLM reject.] A conservative language-model filter removes clusters that
+        are clearly not themes (\S\ref{sec:stage5}).
+\end{description}
+
+% =====================================================================
+\section{Stage 0: entity selection}\label{sec:stage0}
+% =====================================================================
+
+\paragraph{Term cleaning.}
+A term $t$ is admissible if it is long enough and contains no stop / calendar / generic-finance
+token:
+\begin{equation}
+\mathrm{keep}(t)=\ind{|t|\ge 3}\;\wedge\;\ind{\mathrm{tok}(t)\cap \mathrm{STOP}=\varnothing}.
+\end{equation}
+
+\paragraph{Entity indicator.}
+Let $\Ent$ be a \emph{corpus-wide entity vocabulary} of word tokens. A term is an entity iff
+any of its tokens belongs to $\Ent$:
+\begin{equation}
+E(t)=\ind{\exists\,u\in\mathrm{tok}(t):\ u\in\Ent}.
+\label{eq:isentity}
+\end{equation}
+
+\paragraph{Building $\Ent$.}
+Run a named-entity recogniser (spaCy \texttt{en\_core\_web\_sm}) over all discovery
+headlines. Collect the tokens appearing inside spans labelled in
+\[
+\mathcal{L}=\{\text{ORG},\text{PRODUCT},\text{PERSON},\text{WORK\_OF\_ART},\text{FAC},\text{NORP},\text{EVENT}\},
+\]
+and retain a token $u$ iff
+\begin{equation}
+u\in\Ent \iff
+\bigl(\textstyle\sum_{\text{spans }s\in\mathcal{L}} \ind{u\in s}\ge 2\bigr)\ \wedge\
+\bigl(u\notin \text{EnglishDict}\bigr)\ \wedge\ \bigl(u\ \text{matches}\ \texttt{[a-z][a-z0-9'\textbackslash-]+}\bigr).
+\label{eq:vocab}
+\end{equation}
+
+\paragraph{Why a corpus-wide, non-dictionary vocabulary?}
+Out-of-the-box NER is unreliable on Bloomberg-style Title-Case / ALL-CAPS headlines: it
+mis-tags leading verbs as proper nouns (\emph{``Microsoft Mulls''} $\to$ \textsc{org}) and
+misses lowercased product names (\texttt{ChatGPT} is dropped from $\approx 83\%$ of its
+headlines). Two design choices repair this.
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Aggregate, do not trust per-headline tags.} A token is admitted only if it is
+        tagged as an entity in $\ge 2$ \emph{different} headlines. Casing noise is roughly
+        independent across headlines, so a spurious tag (\emph{``Mulls''}) rarely recurs,
+        whereas a true name (\emph{``openai''}) recurs. The count threshold is a denoiser:
+        if $p$ is the per-headline false-tag probability for a junk token, the probability it
+        clears the $\ge\!2$ bar across its occurrences falls like $O(p^2)$.
+  \item \textbf{Keep only non-dictionary tokens.} Real entity names (\texttt{openai},
+        \texttt{nvidia}, \texttt{chatgpt}) are almost never English dictionary words, whereas
+        mis-tagged common words (\emph{mulls}, \emph{sparks}, \emph{creator}) are. Subtracting
+        the dictionary, $\Ent \subseteq \Vocab\setminus\text{EnglishDict}$, removes the dominant
+        NER error class while costing few true names.
+\end{enumerate}
+This converts the \emph{select-out} blocklist of the predecessor (an explicit list of
+event verbs) into a \emph{select-in} whitelist of entity tokens learned from the corpus, which
+generalises beyond a hand-curated list while agreeing with it on the cases that matter
+(\texttt{chatgpt}, \texttt{openai}, \texttt{microsoft}, \texttt{nvidia} all pass both).
+
+% =====================================================================
+\section{Stage 1: novelty and support}\label{sec:stage1}
+% =====================================================================
+
+\paragraph{Baseline vocabulary.}
+$\Base=\bigcup_{d\in B}\Terms(d)$ is the set of every term seen on or before $t_0$.
+
+\paragraph{Novelty.}
+A term is novel at week $w$ iff it never appeared in the baseline,
+\begin{equation}
+\mathrm{novel}(t)=\ind{t\notin\Base}.
+\end{equation}
+Set-difference against $\Base$ is a \emph{high-pass filter on term history}: it annihilates
+every persistent, background, or recurrent name and keeps only first-time arrivals. Formally,
+if $T(t)=\min\{\tau(d):t\in\Terms(d)\}$ is the term's first-appearance time, then
+$\mathrm{novel}(t)=\ind{T(t)>t_0}$, so novelty is exactly a \emph{first-passage} (birth)
+event relative to the baseline. This is what makes the detector forward-looking rather than
+descriptive: emergence is, by construction, the appearance of vocabulary that did not exist
+before.
+
+\paragraph{Support.}
+Among novel entities, keep only those with enough weekly mentions, $c_w(t)\ge m$ with $m=3$.
+Under a null in which a junk term appears in headlines as independent rare events with weekly
+rate $\lambda$, $c_w(t)\sim\mathrm{Poisson}(\lambda)$ and the per-week false-alarm rate is
+$\Pr[c_w\ge 3]=1-e^{-\lambda}(1+\lambda+\tfrac{\lambda^2}{2})=O(\lambda^3)$ for small
+$\lambda$. The cubic suppression of singletons and doubletons is why $m=3$ removes the long
+tail of one-off names cheaply.
+
+\paragraph{Candidate set.}
+Combining Stages 0--1, the candidates at week $w$ are
+\begin{equation}
+C_w=\bigl\{t:\ E(t)=1,\ \mathrm{keep}(t)=1,\ t\notin\Base,\ c_w(t)\ge m\bigr\}.
+\end{equation}
+
+% =====================================================================
+\section{Stage 2: graph features -- reach and clustering}\label{sec:stage2}
+% =====================================================================
+
+This is the heart of the method. For each candidate anchor $t\in C_w$ we read two numbers off
+its neighbourhood in $\mathcal{G}_w$.
+
+\paragraph{Entity neighbourhood and reach.}
+Restrict $t$'s neighbours to other entities and order them by co-occurrence strength,
+\begin{equation}
+N_E(t)=\bigl\{p:\ A_w(t,p)>0,\ E(p)=1\bigr\},\qquad
+\deg_w(t)=\bigl|N_E(t)\bigr|.
+\end{equation}
+$\deg_w(t)$ is the \emph{reach}: the number of distinct entity partners with which $t$ shares
+a headline that week.
+
+\paragraph{Local clustering of the partners.}
+Take the $K$ strongest partners $P=\mathrm{top}_K\,N_E(t)$ (with $K=15$) and measure the edge
+density \emph{among the partners themselves}:
+\begin{equation}
+\clu_w(t)=
+\begin{dcases}
+\frac{\displaystyle\sum_{\{i,j\}\subseteq P} \ind{A_w(P_i,P_j)>0}}{\dbinom{|P|}{2}}, & |P|\ge 2,\\[2ex]
+0, & |P|<2.
+\end{dcases}
+\label{eq:clustering}
+\end{equation}
+Equation~\eqref{eq:clustering} is the \emph{local clustering coefficient} of node $t$
+(restricted to its $K$ strongest entity partners): the fraction of partner pairs that are
+themselves joined by an edge.
+
+\paragraph{The theme--event dichotomy.}
+The pair $(\deg_w,\clu_w)$ separates two qualitatively different ego-network topologies.
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{Hub / star (theme).} $t$ links many partners that do \emph{not} link each
+        other: $\deg_w$ large, $\clu_w\approx 0$. One concept (\texttt{chatgpt}) connects
+        otherwise-unrelated firms and sectors. In Burt's language, $t$ \emph{spans structural
+        holes}: information and exposure flow \emph{through} it because the communities it
+        joins are not directly connected. This is the structural signature of a
+        cross-sectoral theme.
+  \item \textbf{Clique (event).} $t$ and its partners are all mutually connected: $\clu_w\approx 1$.
+        A single story (\emph{FTX collapse}) makes the same fixed cast of actors co-occur in
+        every headline, so the partner subgraph is near-complete. This is the signature of an
+        idiosyncratic event, not a theme.
+\end{itemize}
+
+\paragraph{A generative justification.}
+Suppose $t$'s partners are drawn from $C$ latent communities and two partners share a headline
+with probability $p_{\mathrm{in}}$ if they belong to the same community and $p_{\mathrm{out}}$
+otherwise, with $p_{\mathrm{out}}\ll p_{\mathrm{in}}$ (a stochastic-block / planted-partition
+model). If $t$ is a broker drawing roughly evenly from all $C$ communities, the expected
+clustering of its partner set is
+\begin{equation}
+\mathbb{E}\bigl[\clu_w(t)\bigr]\;\approx\;
+\frac{1}{C}\,p_{\mathrm{in}}+\Bigl(1-\frac{1}{C}\Bigr)\,p_{\mathrm{out}}
+\;\xrightarrow[\;C\ \text{large}\;]{}\;p_{\mathrm{out}}\approx 0 .
+\end{equation}
+A theme spans many communities ($C$ large) and therefore has clustering near the
+\emph{between}-community edge probability, i.e. near zero. An event lives inside a single
+community ($C=1$), giving clustering $\approx p_{\mathrm{in}}\to 1$. Thus $\clu_w$ is a direct,
+unsupervised estimator of ``how many distinct narratives does this entity tie together'',
+and low $\clu_w$ is precisely the cross-sectoral property a theme must have.
+
+% =====================================================================
+\section{Stage 3: catch and promote}\label{sec:stage3}
+% =====================================================================
+
+\subsection{Catch (high recall)}
+An entity-week is \emph{caught} when it has both enough support and enough reach:
+\begin{equation}
+\mathrm{caught}(t,w)=\ind{c_w(t)\ge m}\ \wedge\ \ind{\deg_w(t)\ge \deg_{\min}},
+\qquad m=3,\ \deg_{\min}=8.
+\end{equation}
+The reach bar $\deg_{\min}=8$ selects \emph{hubs}: it is a threshold on the horizontal axis of
+the $(\deg,\clu)$ plane and removes small, parochial co-occurrence patterns regardless of their
+clustering. Catch is deliberately permissive (it does not yet use $\clu$) so that recall stays
+high; precision is recovered downstream.
+
+\subsection{Promote (persist + grow + bridge)}
+Collapse each caught anchor $a$ into its chronologically ordered caught weeks
+$w_1<\dots<w_n$ with reaches $d_i=\deg_{w_i}(a)$ and clusterings $\clu_i=\clu_{w_i}(a)$.
+The anchor is \emph{promoted} at the first index $i$ satisfying all three of
+\begin{align}
+&\textbf{persistence:} && i\ge \rho, &&\rho=2, \label{eq:persist}\\
+&\textbf{growth:}      && d_i\ \ge\ \max_{j<i} d_j, &&\text{(record reach)} \label{eq:grow}\\
+&\textbf{bridge:}      && \operatorname{median}(\clu_1,\dots,\clu_i)\ \le\ \kappa, &&\kappa=0.60. \label{eq:bridge}
+\end{align}
+The promoted week is that first $w_i$; if no week qualifies the anchor is never promoted
+($\texttt{promoted\_week}=\varnothing$). Each condition encodes a property a genuine theme
+must have over time.
+
+\begin{description}[leftmargin=1.6em,style=nextline]
+  \item[Persistence \eqref{eq:persist}.] Requiring survival for at least $\rho=2$ caught weeks
+        rejects one-week flashes. A spike that appears and vanishes is an event; a theme is a
+        process with positive duration. This is a minimum-lifetime (survival) filter on the
+        anchor's caught history.
+  \item[Growth \eqref{eq:grow}.] $d_i\ge\max_{j<i}d_j$ asks that week $w_i$ be a \emph{record}
+        of the reach sequence: the theme is recruiting strictly more (or at least as many)
+        distinct partners than in any prior week. A maturing theme expands its cross-sectional
+        footprint, so its reach sequence should keep setting new highs; a saturated or fading
+        story does not. Demanding a running-maximum, rather than a mere positive slope, makes
+        the test robust to week-to-week noise.
+  \item[Bridge \eqref{eq:bridge}.] The cumulative \emph{median} clustering must stay at or below
+        $\kappa=0.60$, so the \emph{typical} week is a low-clustering hub. The median (rather
+        than the mean or the latest value) is used because a real theme can contain a transient
+        sub-event that briefly spikes clustering; the median ignores such outliers and asks only
+        that the anchor bridges unrelated stories in most of its life.
+\end{description}
+
+\begin{remark}[Catch vs.\ promote = recall vs.\ precision]
+Catch thresholds the static features $(c_w,\deg_w)$ of a single week; promote thresholds the
+\emph{dynamics} $(d_i)_i$ and $(\clu_i)_i$ across weeks. Splitting the work this way keeps the
+candidate set large until the cheap temporal evidence (persistence, growth, low median
+clustering) has accumulated, then prunes hard. On the benchmark, catch keeps $814$ entities and
+promote keeps $20$.
+\end{remark}
+
+% =====================================================================
+\section{Stage 4: assembling themes}\label{sec:stage4}
+% =====================================================================
+
+A single theme often surfaces under several anchor variants (e.g.\ \texttt{chatgpt} and
+\texttt{chatgpt maker}). Let $S$ be the set of promoted anchors and build the graph
+\begin{equation}
+\mathcal{H}=(S,\,F),\qquad
+(a,b)\in F \iff a,b\in S,\ a\ne b,\ b\in\mathrm{subgraph}(a),
+\end{equation}
+where $\mathrm{subgraph}(a)$ is the anchor plus its top entity partners recorded in $\Rtab$.
+The \emph{themes} are the connected components of $\mathcal{H}$:
+\begin{equation}
+\text{themes}=\bigl\{\,\text{connected components of }\mathcal{H}\,\bigr\}.
+\end{equation}
+Mathematically, the themes are the equivalence classes of the transitive closure of the
+co-occurrence relation on promoted anchors. This deduplicates variant names into one object and
+merges promoted entities that belong to the same narrative, taking $20$ promoted anchors to
+$18$ themes. Each theme is summarised by its merged subgraph and its reach
+$\max_{a}\deg_{\max}(a)$.
+
+% =====================================================================
+\section{Stage 5: the language-model reject filter}\label{sec:stage5}
+% =====================================================================
+
+The surviving themes are passed, top-by-reach, to a language model acting as a
+\emph{conservative, reject-only} classifier. It never decides what \emph{is} a theme; it only
+flags a cluster for removal when, judging from the headlines alone, it clearly falls into one of
+\begin{enumerate}[leftmargin=1.6em,nosep]
+  \item \texttt{single\_entity\_event} -- one firm's idiosyncratic event, no multi-actor narrative;
+  \item \texttt{macro\_market\_aggregate} -- rates, inflation, FX, indices, central-bank policy, commodities;
+  \item \texttt{boilerplate\_wire} -- wire formatting, calendars, routine ``shares rise/fall'' PR.
+\end{enumerate}
+The rule is \emph{when in doubt, keep}. Writing $K(g)\in\{0,1\}$ for the keep decision on a
+group $g$, the final shortlist is $\{g:\,K(g)=1\}$ ($4$ of $18$ on the benchmark, including the
+generative-AI theme).
+
+\paragraph{Why a reject-only, keep-biased filter at the end.}
+The pipeline is a \emph{cascade}: cheap, recall-oriented graph tests at the front, an expensive
+but accurate test at the back, applied only to the few survivors. Two properties make the
+ordering correct.
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{Monotone precision.} Because the model can only \emph{remove} groups, it cannot
+        introduce false positives. It strictly raises precision and leaves recall bounded below
+        by the recall of Stages 0--4. The ``keep when unsure'' bias means its own false-rejection
+        rate is small, so little true recall is lost.
+  \item \textbf{Cost placement.} Let the front stages produce $n$ candidates at negligible cost
+        and the LLM cost $C_{\text{LLM}}$ per group with error rate $\varepsilon$. Applying the
+        LLM only to the $|{\text{themes}}|\ll n$ survivors makes total cost
+        $O(|{\text{themes}}|\,C_{\text{LLM}})$ while the residual false-positive rate is the LLM's
+        own $\varepsilon$. Running the expensive judge first, or as a detector rather than a
+        filter, would multiply cost by orders of magnitude for no recall gain.
+\end{itemize}
+In Bayesian terms, the graph features supply a high-recall prior over candidate themes and the
+LLM supplies a likelihood-ratio test on the assembled headline evidence, evaluated only where the
+prior is already high.
+
+% =====================================================================
+\section{Why the whole pipeline works}
+% =====================================================================
+
+Two robust, unsupervised signals carry the result and a cheap selector plus an LLM clean its
+ends.
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Novelty} (Stage 1) guarantees the detector looks at \emph{emerging} vocabulary
+        only, by set difference against history.
+  \item \textbf{Graph topology} (Stage 2--3) distinguishes a \emph{theme} (high-reach,
+        low-clustering hub spanning structural holes) from an \emph{event} (high-clustering
+        clique) and from \emph{noise} (low reach), using only co-occurrence counts.
+  \item \textbf{Temporal dynamics} (Stage 3) demand the structural signature \emph{persist},
+        \emph{grow}, and \emph{stay a bridge}, which is what separates a durable theme from a
+        flash.
+  \item \textbf{Entity selection} (Stage 0) and the \textbf{LLM filter} (Stage 5) clean the two
+        ends of the funnel; neither is what makes detection work, which is why swapping the
+        hand-written blocklist for an NER vocabulary changes the entry/exit weeks slightly but
+        reproduces the same outcome.
+\end{enumerate}
+
+\paragraph{Benchmark.}
+On the generative-AI theme the funnel runs
+$3{,}767\to 814\to 20\to 18\to 4$, with \texttt{chatgpt} first caught in the week of
+3--9 January 2023 and promoted in the week of 17--23 January 2023. Against a thematic-ETF
+inception of 17 May 2023 this is a lead of about $120$ days ($\approx 4$ months), and the LLM
+keeps the cluster. The result reproduces the predecessor's manual-blocklist run, confirming that
+the detection is driven by the novelty-and-topology core rather than by either Stage-0 device.
+
+% =====================================================================
+\section*{Appendix: parameters}
+% =====================================================================
+\addcontentsline{toc}{section}{Appendix: parameters}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Symbol & Value & Meaning \\
+\midrule
+$t_0$              & 2022-09-30 & baseline cutoff \\
+$[t_1,t_2]$        & 2022-10-01 .. 2023-02-28 & discovery window \\
+freq               & \texttt{W-MON} & weekly bucketing \\
+$m$                & $3$  & minimum weekly mentions (support) \\
+$\deg_{\min}$      & $8$  & catch reach threshold \\
+$K$                & $15$ & partners used for clustering \\
+$\rho$             & $2$  & persistence (weeks) \\
+$\kappa$           & $0.60$ & maximum median clustering (bridge) \\
+$\mathcal{L}$      & ORG, PRODUCT, PERSON, \dots & NER labels kept for $\Ent$ \\
+NER vocab          & $18{,}314$ tokens & non-dictionary entity tokens, count $\ge 2$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
