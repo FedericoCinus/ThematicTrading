@@ -20,6 +20,8 @@ repositories/
 
 # Local data (large raw files — not for version control)
 data/
+output/
+notebooks/output/
 
 # Binary documents
 *.pdf
