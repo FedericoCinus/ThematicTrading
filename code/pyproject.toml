@@ -26,4 +26,5 @@ dependencies = [
     "torch>=2.12.0",
     "transformers>=5.8.1",
     "umap-learn>=0.5.12",
+    "yfinance>=1.5.2",
 ]
