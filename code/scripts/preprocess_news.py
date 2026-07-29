@@ -10,13 +10,13 @@ Dating rule (decided in notebook 0.25 — raw-feed replay artifact):
 
 File layout produced:
 
-  data/raw/raw_news_{year}.csv.xz            raw feed capture (input, immutable)
-  notebooks/output/tmp/terms_{year}.parquet  per-year build cache (disposable)
-  notebooks/output/news_corpus.parquet       THE corpus: all years, cross-year deduped
-  notebooks/output/news_corpus_manifest.json build record (rule version, rows, times)
+  data/raw/raw_news_{year}.csv.xz              raw feed capture (input, immutable)
+  data/processed/tmp/terms_{year}.parquet      per-year build cache (disposable)
+  data/processed/news_corpus.parquet           THE corpus: all years, cross-year deduped
+  data/processed/news_corpus_manifest.json     build record (rule version, rows, times)
 
-Analyses must read ONLY news_corpus.parquet; output/tmp/ exists so that single years
-can be rebuilt incrementally and is safe to delete (regenerable from raw).
+Analyses must read ONLY news_corpus.parquet; processed/tmp/ exists so that single
+years can be rebuilt incrementally and is safe to delete (regenerable from raw).
 
 Per-year term extraction (wires, prefix stripping, >=4-word filter, unigram/bigram
 terms) is identical to the legacy 0.24 builder, so the schema is unchanged.
@@ -40,14 +40,14 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 _ROOT = Path(__file__).resolve().parents[1]                  # code/
-sys.path.insert(0, str(_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))     # scripts/ — theme_detect lives here too
 from theme_detect import WIRES, _extract, _strip_prefix      # noqa: E402  (identical extraction)
 
 RAW_DIR = _ROOT / "data" / "raw"
-OUT_DIR = _ROOT / "notebooks" / "output"
-TMP_DIR = OUT_DIR / "tmp"                                    # per-year build caches (disposable)
-CORPUS = OUT_DIR / "news_corpus.parquet"
-MANIFEST = OUT_DIR / "news_corpus_manifest.json"
+PROC_DIR = _ROOT / "data" / "processed"
+TMP_DIR = PROC_DIR / "tmp"                                   # per-year build caches (disposable)
+CORPUS = PROC_DIR / "news_corpus.parquet"
+MANIFEST = PROC_DIR / "news_corpus_manifest.json"
 RULE = "add-event-v1"                                        # bump when the dating rule changes
 ADD_EVENTS = ["ADD_1STPASS", "ADD_STORY"]                    # publication messages (0.25 §3)
 
