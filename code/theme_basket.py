@@ -48,6 +48,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))   # theme_detect lives in scripts/
 from theme_detect import _load_env
 
 _ROOT = Path(__file__).resolve().parent                      # code/

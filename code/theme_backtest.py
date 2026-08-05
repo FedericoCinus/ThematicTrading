@@ -87,6 +87,36 @@ def load_prices(tickers, *, download: bool = True, force: bool = False,
     return pd.DataFrame(cols).sort_index() if cols else pd.DataFrame()
 
 
+def audit_splits(prices: pd.DataFrame, threshold: float = 1.5) -> pd.DataFrame:
+    """Data-quality guard: daily |moves| > threshold, cross-checked against Yahoo's split table.
+
+    A move flagged 'NEAR SPLIT' (within 3 days of a split entry) is almost certainly an
+    UNADJUSTED split in Yahoo's series (e.g. FFAI's 1-for-150 on 2026-07-24, +9543% fake day,
+    still broken in fresh downloads as of Aug 2026) -> drop or repair before backtesting past
+    that date. Moves far from any split can be genuine (FFAI meme squeeze May 2024: +367%).
+    """
+    import yfinance as yf
+
+    rows = []
+    for t in prices.columns:
+        r = prices[t].pct_change(fill_method=None).dropna()
+        big = r[r.abs() > threshold]
+        if not len(big):
+            continue
+        splits = yf.Ticker(t).splits
+        split_days = pd.DatetimeIndex(splits.index.tz_localize(None).normalize()) if len(splits) else pd.DatetimeIndex([])
+        for d, v in big.items():
+            near = bool(len(split_days)) and (abs(split_days - d.normalize()) <= pd.Timedelta(days=3)).any()
+            rows.append({"ticker": t, "date": d.date(), "move": v,
+                         "verdict": "NEAR SPLIT — likely unadjusted" if near else "far from splits — plausibly real"})
+    out = pd.DataFrame(rows)
+    if len(out):
+        print(out.to_string(index=False, formatters={"move": "{:+.0%}".format}))
+    else:
+        print(f"no daily |move| > {threshold:.0%} in {prices.shape[1]} tickers — series look split-clean")
+    return out
+
+
 # ---------------------------------------------------------------- portfolio math
 def equal_weight_curve(prices: pd.DataFrame, tickers, start, end=None):
     """Equal-weight buy-and-hold curve normalised to 1.0 at the first trading day >= start.
@@ -110,6 +140,54 @@ def equal_weight_curve(prices: pd.DataFrame, tickers, start, end=None):
 
 def max_drawdown(curve: pd.Series) -> float:
     return float((curve / curve.cummax() - 1).min())
+
+
+def _rebalance_days(index: pd.DatetimeIndex, start, end, months: int) -> list:
+    """Actual trading days of the rebalance grid: first trading day >= each boundary,
+    with `end` appended so the trailing period is measured too."""
+    end = pd.Timestamp(end)
+    grid = pd.date_range(pd.Timestamp(start), end, freq=pd.DateOffset(months=months))
+    if grid[-1] < end:
+        grid = grid.append(pd.DatetimeIndex([end]))
+    days = []
+    for d in grid:
+        pos = index.searchsorted(pd.Timestamp(d))
+        days.append(index[pos] if pos < len(index) else index[-1])
+    return list(dict.fromkeys(days))
+
+
+def rebalance_backtest(prices: pd.DataFrame, tickers, start, end=None, months: int = 3):
+    """Equal-weight basket rebalanced every `months` months: buy at each rebalance
+    date, mark exactly at the next period's entry day (contiguous — no gap days lost
+    when a boundary falls on a weekend), final position marked at `end`.
+    Returns (per-period returns, their sum, sum/std)."""
+    end = pd.Timestamp(end) if end is not None else prices.index.max()
+    days = _rebalance_days(prices.index, start, end, months)
+    rets = {}
+    for d0, d1 in zip(days[:-1], days[1:]):
+        curve, held, _ = equal_weight_curve(prices, tickers, d0, d1)
+        if len(curve) and held:
+            rets[d0.date()] = float(curve.iloc[-1] - 1)
+    r = pd.Series(rets, name="period_return")
+    sd = r.std(ddof=1)
+    return r, float(r.sum()), float(r.sum() / sd) if len(r) > 1 and sd > 0 else float("nan")
+
+
+def rebalance_curve(prices: pd.DataFrame, tickers, start, end=None, months: int = 3) -> pd.Series:
+    """Daily equity curve (1.0 at start) of the same strategy as `rebalance_backtest`:
+    equal weight at each rebalance day, held to the next. Segments compound (a curve
+    is a portfolio path), whereas the backtest table *sums* the period returns."""
+    end = pd.Timestamp(end) if end is not None else prices.index.max()
+    days = _rebalance_days(prices.index, start, end, months)
+    parts, level = [], 1.0
+    for i, (d0, d1) in enumerate(zip(days[:-1], days[1:])):
+        curve, held, _ = equal_weight_curve(prices, tickers, d0, d1)
+        if not len(curve):
+            continue
+        seg = curve * level
+        level = float(seg.iloc[-1])
+        parts.append(seg if d1 == days[-1] else seg.iloc[:-1])   # boundary day belongs to next segment
+    return pd.concat(parts) if parts else pd.Series(dtype="float64")
 
 
 def summarise(curve: pd.Series) -> dict:
