@@ -1,0 +1,15 @@
+# variant: quantum-pure
+# drop the bare word 'quantum' (matches 'quantum leap', 'quantum of solace')
+# 11 terms
+
+post-quantum
+quantum annealing
+quantum computer
+quantum computing
+quantum error correction
+quantum key distribution
+quantum sensing
+quantum supremacy
+qubit
+superconducting qubit
+trapped ion

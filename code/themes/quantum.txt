@@ -1,0 +1,25 @@
+# theme: quantum
+# as-of: 2022-09-30    (pass with --as-of; this file holds the vocabulary only)
+# role:  CONTROL — the ranking already works here; a fix must not break it
+#
+# 12 terms, pinned from theme_basket_quantum2022_bare_pit_manifest.json
+# Same funnel, mature theme. Top-4 under the current rule is the quantum basket
+# traded in deck 8 / notebook 0.35 (IONQ, QUBT, RGTI, QBTS).
+# Includes the bare word 'quantum' (the '_bare' variant) — that is what was traded.
+# No company names in the vocab: naming IONQ/RGTI would leak the answer.
+#
+# Fixed for the mapper comparison: change this file and old baskets stop being
+# comparable. A new variant = a new file, not an edit.
+
+post-quantum
+quantum
+quantum annealing
+quantum computer
+quantum computing
+quantum error correction
+quantum key distribution
+quantum sensing
+quantum supremacy
+qubit
+superconducting qubit
+trapped ion

@@ -190,6 +190,51 @@ def rebalance_curve(prices: pd.DataFrame, tickers, start, end=None, months: int 
     return pd.concat(parts) if parts else pd.Series(dtype="float64")
 
 
+def weighted_curve(prices: pd.DataFrame, tickers, weights, start, end=None):
+    """Score-weighted buy-and-hold curve, normalised to 1.0 at the first trading day >= start.
+
+    Same contract as `equal_weight_curve` (returns curve, held, dropped) but each name carries
+    its own weight instead of 1/N. `weights` is a mapping ticker -> score; weights are
+    renormalised over the names actually held, so a name with no price at t0 hands its weight
+    back to the rest rather than silently shrinking the book. Passing equal weights reproduces
+    `equal_weight_curve` exactly.
+    """
+    start, end = pd.Timestamp(start), (pd.Timestamp(end) if end is not None else prices.index.max())
+    cols = [t for t in tickers if t in prices.columns]
+    px = prices.loc[start:end, cols].ffill()
+    if px.empty:
+        return pd.Series(dtype="float64"), [], list(tickers)
+    held = [t for t in cols if pd.notna(px[t].iloc[0])]
+    dropped = [t for t in tickers if t not in held]
+    if not held:
+        return pd.Series(dtype="float64"), [], dropped
+    w = pd.Series({t: float(weights[t]) for t in held})
+    if w.sum() <= 0:
+        w = pd.Series(1.0, index=held)
+    w /= w.sum()
+    rel = px[held] / px[held].iloc[0]
+    return (rel * w).sum(axis=1), held, dropped
+
+
+def rebalance_backtest_weighted(prices: pd.DataFrame, tickers, weights, start, end=None,
+                                months: int = 3):
+    """`rebalance_backtest` with score weights: same periods, same summed-return convention.
+
+    Weights are re-applied at every rebalance date (they drift with prices inside a period,
+    exactly as the equal-weight book does).
+    """
+    end = pd.Timestamp(end) if end is not None else prices.index.max()
+    days = _rebalance_days(prices.index, start, end, months)
+    rets = {}
+    for d0, d1 in zip(days[:-1], days[1:]):
+        curve, held, _ = weighted_curve(prices, tickers, weights, d0, d1)
+        if len(curve) and held:
+            rets[d0.date()] = float(curve.iloc[-1] - 1)
+    r = pd.Series(rets, name="period_return")
+    sd = r.std(ddof=1)
+    return r, float(r.sum()), float(r.sum() / sd) if len(r) > 1 and sd > 0 else float("nan")
+
+
 def summarise(curve: pd.Series) -> dict:
     """Total return, annualised return/vol and max drawdown for one curve."""
     if curve.empty:
@@ -247,6 +292,111 @@ def horizon_table(prices: pd.DataFrame, tickers, start, *, benchmark: str = BENC
                      label: b, benchmark: s, "excess": b - s,
                      "hit_rate": float((per_name > s).mean()), "n": len(held)})
     return pd.DataFrame(rows).set_index("horizon")
+
+
+# ---------------------------------------------------------------- point-in-time market cap
+CAP_CACHE = PRICE_DIR / "_market_caps.json"
+
+
+def market_cap_asof(ticker: str, date, prices: pd.DataFrame, *, cache: bool = True) -> float | None:
+    """Market cap of `ticker` on `date`, in millions USD, as it was *then*.
+
+    cap = shares(t) x price(t) x product(split ratios after t)
+
+    The split factor is the part that is easy to get wrong. Price series are back-adjusted for
+    splits (a 10-for-1 split divides every earlier price by 10) while the share count recorded
+    at the time is not -- so multiplying the two mixes two unit systems and understates a name
+    like NVDA ten-fold. Multiplying by the cumulative ratio of every split *after* the date puts
+    both back into that day's units; it is 1.0 for a name that never split.
+
+    Shares come from Yahoo's shares-outstanding history, falling back to SEC XBRL
+    (dei:EntityCommonStockSharesOutstanding, last value *filed* on or before the date -- filed,
+    not period-end, or the figure would not have been public yet).
+
+    Returns None when the ticker cannot be resolved. Callers must treat None as
+    "unknown, review" rather than as "fails the filter": a silently wrong cap admits or
+    excludes a name and nothing downstream notices.
+    """
+    import json as _json
+
+    date = str(pd.Timestamp(date).date())
+    key = f"{ticker}@{date}"
+    caches = {}
+    if cache and CAP_CACHE.exists():
+        caches = _json.loads(CAP_CACHE.read_text())
+        if key in caches:
+            return caches[key]
+
+    import yfinance as yf
+
+    shares = None
+    try:
+        sh = yf.Ticker(ticker).get_shares_full(start="2010-01-01", end="2030-01-01")
+        if sh is not None and len(sh):
+            sh.index = pd.to_datetime(sh.index).tz_localize(None)
+            sh = sh[sh.index <= date]
+            if len(sh):
+                shares = float(sh.iloc[-1])
+    except Exception:
+        pass
+    if shares is None:
+        shares = _sec_shares_asof(ticker, date)
+
+    px = prices[ticker].dropna() if ticker in prices.columns else pd.Series(dtype="float64")
+    px = px[px.index <= date]
+    if shares is None or px.empty:
+        out = None
+    else:
+        try:
+            sp = yf.Ticker(ticker).splits
+            factor = float(sp[sp.index.tz_localize(None) > pd.Timestamp(date)].prod()) if len(sp) else 1.0
+        except Exception:
+            factor = 1.0
+        out = shares * float(px.iloc[-1]) * factor / 1e6
+
+    if cache:
+        caches[key] = out
+        CAP_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        CAP_CACHE.write_text(_json.dumps(caches, indent=1))
+    return out
+
+
+def _sec_shares_asof(ticker: str, date) -> float | None:
+    """Shares outstanding last *filed* on or before `date`, from SEC XBRL. None if unavailable."""
+    import json as _json
+    import os
+
+    import requests
+
+    try:
+        tmap = _json.loads((_ROOT / "data" / "raw" / "edgar" / "company_tickers.json").read_text())
+    except Exception:
+        return None
+    cik = {v["ticker"]: v["cik_str"] for v in tmap.values()}.get(ticker)
+    ua = os.environ.get("SEC_USER_AGENT")
+    if not cik or not ua:
+        return None
+    url = (f"https://data.sec.gov/api/xbrl/companyconcept/CIK{cik:010d}"
+           f"/dei/EntityCommonStockSharesOutstanding.json")
+    try:
+        r = requests.get(url, headers={"User-Agent": ua}, timeout=30)
+        if r.status_code != 200:
+            return None
+        u = pd.DataFrame(r.json()["units"]["shares"])
+        u["filed"] = pd.to_datetime(u["filed"])
+        k = u[u["filed"] <= date].sort_values("filed")
+        return float(k.iloc[-1]["val"]) if len(k) else None
+    except Exception:
+        return None
+
+
+def eligible(tickers, date, prices: pd.DataFrame, *, min_cap_musd: float = 200.0):
+    """Split `tickers` into (kept, removed, unresolved) by point-in-time market cap."""
+    kept, removed, unresolved = [], [], []
+    for t in tickers:
+        c = market_cap_asof(t, date, prices)
+        (unresolved if c is None else kept if c >= min_cap_musd else removed).append(t)
+    return kept, removed, unresolved
 
 
 def basket_tickers(name: str, top_n: int = 10, *, proc_dir: Path = PROC_DIR) -> list[str]:

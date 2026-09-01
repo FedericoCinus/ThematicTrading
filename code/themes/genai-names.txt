@@ -1,0 +1,11 @@
+# variant: genai-names
+# control: company names only — a pure ticker lookup, no discovery
+# 7 terms
+
+alibaba
+baidu
+google
+jpmorgan
+microsoft
+netease
+nvidia

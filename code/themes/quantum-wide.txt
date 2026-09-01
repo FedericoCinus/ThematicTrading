@@ -1,0 +1,24 @@
+# variant: quantum-wide
+# add more quantum-technology concepts (each verified to have EDGAR hits)
+# 20 terms
+
+ion trap
+post-quantum
+quantum
+quantum advantage
+quantum algorithm
+quantum annealing
+quantum computer
+quantum computing
+quantum error correction
+quantum hardware
+quantum key distribution
+quantum machine learning
+quantum networking
+quantum processor
+quantum sensing
+quantum software
+quantum supremacy
+qubit
+superconducting qubit
+trapped ion

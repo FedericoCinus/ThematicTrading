@@ -1,0 +1,26 @@
+# theme: genai
+# as-of: 2023-01-17    (pass with --as-of; this file holds the vocabulary only)
+# role:  TEST CASE — the ranking is visibly broken here
+#
+# 13 terms, pinned from theme_basket_genai_pit_manifest.json
+# Detection: 0.28 anchors+partners -> 0.29 entity BOW; promotion date = first fire.
+# The top-10 of this basket under the current rule is the genAI basket traded in
+# deck 8 / notebook 0.35 (NVDA, TRIP, GOOG, EA, MYPS, APPS, EXPE, EBAY, CRNC, FFAI).
+# Known: 'chatgpt' has 0 filing hits at this date; 'altman' collides with the Altman Z-score.
+#
+# Fixed for the mapper comparison: change this file and old baskets stop being
+# comparable. A new variant = a new file, not an edit.
+
+alibaba
+altman
+baidu
+chatgpt
+chatgpt-like
+chatgpt-style
+ernie
+google
+jpmorgan
+microsoft
+netease
+nvidia
+openai

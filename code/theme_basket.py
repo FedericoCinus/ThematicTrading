@@ -61,7 +61,10 @@ ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data"
 FTS_COVERAGE_START = date(2001, 1, 1)
 FTS_MAX_WINDOW = 10_000                                      # EFTS result-window hard cap
 EXTRACT_RULE = "extract-v1"                                  # bump when text extraction changes
-SCORE_RULE = "fts-count-v1"                                  # bump when scoring semantics change
+SCORE_RULE = "fts-density-v2"                                # bump when scoring semantics change
+MIN_HITS = 10               # below this many term hits, per_1k_words is noise, not a signal
+CORPUS_SIZE = 30_000        # approx. 10-K/10-Q filed in a 1-year window (IDF denominator)
+MIN_SPECIFIC = 2            # a company must hit at least this many non-generic terms
 
 
 # ======================================================================================
@@ -486,10 +489,48 @@ def score_basket(short: pd.DataFrame, vocab: list[str], verbose: bool = True
     basket["total"] = basket[vocab].sum(axis=1)
     basket["n_terms_hit"] = (basket[vocab] > 0).sum(axis=1)
     basket["per_1k_words"] = (1000 * basket["total"] / basket["n_words"]).round(3)
-    basket = (basket.sort_values(["n_terms_hit", "per_1k_words"], ascending=False)
+    # Rank by *intensity* (per_1k_words), not breadth: a company that is about the theme
+    # repeats a few of its words, one that brushes past it touches many words once.
+    # per_1k_words is a ratio, so it explodes on short filings (2 hits in 1k words beats
+    # 269 in 53k) -> companies below MIN_HITS total hits rank after those above it.
+    basket = (basket.assign(_floor=basket["total"] >= MIN_HITS)
+                    .sort_values(["_floor", "per_1k_words", "n_terms_hit"], ascending=False)
+                    .drop(columns="_floor")
                     .reset_index(drop=True))
     return basket[["ticker", "cik", "company", "n_filings", "n_words", *vocab,
                    "total", "n_terms_hit", "per_1k_words"]], filings
+
+
+def rank_specificity(basket: pd.DataFrame, meta: dict, *, corpus_size: int = CORPUS_SIZE,
+                     min_specific: int = MIN_SPECIFIC) -> pd.DataFrame:
+    """Alternative ranking: weight each term by how rare it is, and require breadth of *evidence*.
+
+    Two ideas the count/density rules miss:
+
+    1. A term in thousands of filings is not evidence. Weight each hit by its inverse document
+       frequency, log(corpus_size / df), using the EFTS totals already stored in the manifest.
+       This demotes 'google' (1,699 filings) and 'jpmorgan' (4,385) against 'openai' (2).
+    2. A company scoring entirely on one word is almost always a false positive -- 'quantum'
+       is in Quantum-Si's and Quantum Corp's *names*, 'ernie' is TJX's CEO. Require hits on at
+       least `min_specific` terms that were specific enough to shortlist on (i.e. not in
+       ``meta["generic_terms"]``).
+
+    Pure function of what a build already saved -- no EDGAR calls, no rebuild. Returns the
+    basket re-ranked, with `weighted` (IDF-weighted density) and `n_specific` columns, and
+    companies failing the gate dropped.
+    """
+    import math
+
+    vocab, df = meta["vocab"], meta["fts_totals"]
+    specific = [t for t in vocab if t not in set(meta["generic_terms"])]
+    idf = pd.Series({t: math.log(corpus_size / max(df.get(t, 0), 1)) for t in vocab})
+
+    out = basket.copy()
+    out["weighted"] = (out[vocab] * idf).sum(axis=1) * 1000 / out["n_words"]
+    out["n_specific"] = (out[specific] > 0).sum(axis=1)
+    return (out[out["n_specific"] >= min_specific]
+            .sort_values(["weighted", "n_specific"], ascending=False)
+            .reset_index(drop=True))
 
 
 def build_basket(vocab: list[str], as_of: str, *, lookback_days: int = 365,

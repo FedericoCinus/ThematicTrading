@@ -1,0 +1,17 @@
+# variant: genai-concepts
+# concepts only: the theme described by technology, no company named
+# 13 terms
+
+altman
+chatbot
+chatgpt
+chatgpt-like
+chatgpt-style
+conversational ai
+ernie
+foundation model
+generative ai
+large language model
+natural language generation
+neural network
+openai
