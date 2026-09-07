@@ -197,7 +197,7 @@ def _llm_keep(subgraph, headlines, llm_model):
 
 def _load_env(env_path=None):
     """Set OPENAI_* from a .env file if not already in the environment (default: code/.env)."""
-    p = Path(env_path) if env_path else Path(__file__).resolve().parent / ".env"
+    p = Path(env_path) if env_path else Path(__file__).resolve().parents[1] / ".env"
     if p.exists():
         for line in p.read_text().splitlines():
             line = line.strip()
