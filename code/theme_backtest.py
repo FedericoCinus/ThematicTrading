@@ -402,3 +402,45 @@ def eligible(tickers, date, prices: pd.DataFrame, *, min_cap_musd: float = 200.0
 def basket_tickers(name: str, top_n: int = 10, *, proc_dir: Path = PROC_DIR) -> list[str]:
     """Top-N tickers from a `theme_basket_{name}.parquet` output."""
     return pd.read_parquet(proc_dir / f"theme_basket_{name}.parquet").head(top_n)["ticker"].tolist()
+
+
+# ---------------------------------------------------------------- risk-free rate
+IRX_CACHE = PRICE_DIR / "_irx.parquet"
+
+
+def _irx(max_age_days: float = 7) -> pd.Series:
+    """13-week T-bill yield (^IRX), percent per year, daily. Cached like the price series."""
+    if not _is_stale(IRX_CACHE, max_age_days):
+        s = pd.read_parquet(IRX_CACHE)
+        return s.set_index("date")["yield"]
+    import yfinance as yf
+
+    raw = yf.download("^IRX", period="max", progress=False, auto_adjust=False)["Close"].dropna()
+    s = raw.iloc[:, 0] if isinstance(raw, pd.DataFrame) else raw
+    s.index = pd.to_datetime(s.index).tz_localize(None)
+    IRX_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"date": s.index, "yield": s.to_numpy()}).to_parquet(IRX_CACHE, index=False)
+    return s
+
+
+def cash_returns(days) -> pd.Series:
+    """Return earned on cash over each holding period in `days` (the rebalance dates).
+
+    The bill yield quoted at the *start* of a period, applied for that period's actual length --
+    the return a portfolio would have made by doing nothing at all. This is the `r_f` that turns
+    a return/volatility ratio into a Sharpe ratio.
+    """
+    y = _irx()
+    out = []
+    for a, b in zip(days[:-1], days[1:]):
+        prior = y[y.index <= a]
+        out.append(float(prior.iloc[-1]) / 100 * (b - a).days / 365 if len(prior) else 0.0)
+    return pd.Series(out)
+
+
+def sharpe(prices: pd.DataFrame, tickers, start, end=None, months: int = 3) -> float:
+    """Annualised Sharpe ratio: mean excess return over cash, divided by its own volatility."""
+    r, _, _ = rebalance_backtest(prices, tickers, start, end, months=months)
+    days = _rebalance_days(prices.index, start, end or prices.index[-1], months)
+    ex = pd.Series(list(r)) - cash_returns(days).to_numpy()
+    return float(ex.mean() / ex.std(ddof=1) * (12 / months) ** 0.5)
