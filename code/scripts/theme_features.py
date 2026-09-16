@@ -22,7 +22,7 @@ import pandas as pd
 
 import theme_backtest as bt
 
-_ROOT = Path(__file__).resolve().parent
+_ROOT = Path(__file__).resolve().parent.parent          # code/, one above scripts/
 OHLCV_DIR = _ROOT / "data" / "raw" / "ohlcv"
 INFO_CACHE = OHLCV_DIR / "_info.json"
 BENCH = "SPY"

@@ -32,7 +32,7 @@ import pandas as pd
 
 _ROOT = Path(__file__).resolve().parents[1]                  # code/
 sys.path.insert(0, str(_ROOT))
-from theme_basket import SCORE_RULE, EXTRACT_RULE, TICKER_CSV, build_basket  # noqa: E402
+from code.scripts.theme_basket import SCORE_RULE, EXTRACT_RULE, TICKER_CSV, build_basket  # noqa: E402
 
 OUT_DIR = _ROOT / "data" / "processed"
 

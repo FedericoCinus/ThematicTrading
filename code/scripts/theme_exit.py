@@ -24,7 +24,7 @@ import pandas as pd
 
 import theme_backtest as bt
 
-_ROOT = Path(__file__).resolve().parent
+_ROOT = Path(__file__).resolve().parent.parent          # code/, one above scripts/
 PROC_DIR = _ROOT / "data" / "processed"
 CORPUS = _ROOT / "notebooks" / "output" / "news_corpus.parquet"
 NEWS_CACHE = PROC_DIR / "theme_exit_weekly_hits.parquet"

@@ -1,0 +1,142 @@
+# ======================================================================================
+# NO MODEL — what the statistics alone promote and buy
+#
+# Gate 4 and both vocabulary filters switched off. Expect roughly fifty clusters a week
+# instead of one, and an empty basket: no listed company is called `chatgpt`.
+#
+# ======================================================================================
+
+data_root: ../data
+
+# ======================================================================================
+# 0 · PREPROCESSING — messages into one dated corpus. No method: there is only one way to do it.
+# ======================================================================================
+preprocessing:
+  # A manual escape hatch: exact titles to discard, applied when the corpus is joined.
+  # Normally empty — `first_occurrence` already removes a title said twice, so anything listed
+  # here is a title you judged worthless the first time too.
+  drop_titles: []
+
+# ======================================================================================
+# 1 · DETECT — which words became a theme, and when
+# ======================================================================================
+# THE SEARCH SPACE. Every value below is a gate the detector opens or closes, and none of
+# them is settled: they came from a corpus that no longer exists — headlines were stripped
+# of their prefix and deduplicated per year — so treat them as a starting point to sweep,
+# not as tuned constants. Sweep one with TT_OVERRIDES and compare the runs by their run id.
+detect:
+  method: graph_anomaly
+
+  # WINDOW — what counts as "before" and "now"
+  detect_months: 5        # a theme must emerge inside this window, ending at the as-of date
+  baseline_months: 24     # a term must be absent from this much history to count as new
+
+  # GATE 1 · CANDIDATE — a term nobody used before
+  min_mentions: 3         # headlines that must carry it, in one week
+
+  # GATE 2 · CAUGHT — it now keeps company with many different things
+  degree_min: 8           # distinct entity terms it co-occurs with
+
+  # GATE 3 · PROMOTED — it lasts, it peaks, and it bridges
+  persist_weeks: 2        # weeks it must survive gate 2 before it can graduate
+  cluster_max: 0.60       # LOW clustering means its partners do not already know each other,
+                          # which is what a theme looks like; high means one clique talking to
+                          # itself, which is a single company's news cycle
+
+  # GATE 4 · REAL — is this a theme at all, or one company's news wearing a theme's clothes?
+  # The three gates above are statistics and cannot tell those apart: left to themselves they
+  # promote an IPO, a court case and a recurring wire table alongside the one real theme. This
+  # gate only ever REJECTS, and only in four named ways, so it can never invent a theme.
+  # Set llm_model to null to run without it — and expect ~50 stories per theme downstream.
+  # gpt-4o and not the mini: on a borderline cluster the small model is genuinely undecided and
+  # `temperature: 0` does not save it — that fixes which token wins, not the arithmetic that ranks
+  # them, and near-ties flip on floating-point noise between requests. Measured on ChatGPT's cluster,
+  # the mini keeps it 6 times in 20; gpt-4o keeps it 8 in 8. Clear-cut clusters never wobbled on either.
+  llm_model: null   
+  llm_max: 100            # cost ceiling: themes past it are dropped, not waved through
+
+  # VOCABULARY — what the theme is made of. Gathered from all history up to the as-of date, then
+  # filtered by the model to names one could invest in or build on: that filter is what the
+  # notebooks used to do by hand, and without it a theme is mostly sentence debris.
+  max_doc_freq: 0.0001          # drop a word appearing in more than this share of headlines before
+                                # the as-of date. `microsoft` and `google` belong to the genAI theme
+                                # but are in 2,380 and 3,350 of two million baseline headlines, so
+                                # counting them measures Microsoft, not the theme: with them in, the
+                                # weekly series is flat through ChatGPT's whole arrival; without
+                                # them it goes from 1 headline a week to 40.
+  theme_bag_of_words_size: -1   # how many words a theme keeps, most co-occurring first; -1 is all.
+                                # ChatGPT at 2023-01-16 yields 11: the first are microsoft, openai,
+                                # google, alphabet — the last two are tata and oxbotica, real
+                                # companies that shared a single headline about self-driving cars.
+
+  # ---------------------------------------------------------------------------------------
+  # ======================================================================================
+# 2 · MONITOR — when to be in the theme and when to be out
+# ======================================================================================
+# ALSO A SEARCH SPACE. Three of these are the number 4 and they mean different things — how
+# much history a score needs, how long a theme must stay loud, and how far back the
+# acceleration looks. Change one at a time and compare the runs by their run id.
+monitor:
+  # ONE ENTRY AND ONE EXIT per theme, decided by two halves that do NOT share a measure.
+  # An acceleration score can find a beginning and is blind to an end: its window catches up
+  # with any sustained level and returns to zero while the theme is still running. Using it for
+  # both held genAI two weeks on a theme that ran for years.
+
+  lookback_months: 30     # how far back the weekly grid reaches from the as-of date. It has to
+                          # clear the theme's birth AND the exit's base_weeks before it; beyond
+                          # that it changes nothing, because roll_weeks already cuts the memory.
+
+  # ENTER — ACCELERATION: is this week unusual against the weeks just before it
+  entry:
+    method: rolling_z
+    roll_weeks: 12        # the weeks a given week is compared against — its own recent past,
+                          # itself excluded, or a spike would flatten inside its own window
+    min_periods: 4        # weeks of history needed before a score exists at all
+
+    # RULE 1 · LEVEL — loud, and staying loud
+    z_threshold: 1.0      # standard deviations above the recent mean that count as loud
+    n_consecutive: 4      # weeks in a row it must be loud to enter
+
+    # RULE 2 · ACCELERATION — arriving too fast to wait for rule 1
+    accel_lag: 4          # weeks back the score is compared with itself
+    accel_threshold: 3.0  # how much it must have risen over that span to enter on its own
+
+  # LEAVE — LEVEL: is the flow still above what it was before we bought
+  exit:
+    method: news_level
+    roll_weeks: 12        # the trailing window the level is measured over
+    base_weeks: 52        # the weeks BEFORE entry that define this theme's normal
+    threshold: 1.0        # 1.0 = back to pre-entry normal, and the story is over
+    n_consecutive: 4      # weeks it must stay below before the position closes
+    arm: null             # the level it must first reach to arm the rule; null = threshold.
+                          # Without arming, the trailing mean at entry is still mostly pre-theme,
+                          # it sits near 1.0, and the position closes a month after opening.
+
+# ======================================================================================
+# 3 · BASKET — which companies the theme's words buy
+# ======================================================================================
+basket:
+  # THE THEME'S WORDS AGAINST COMPANY NAMES. No network beyond the SEC register, point-in-time
+  # for free, and blind to any company not named after its own brand.  3_baskets/uniform_method/
+  method: uniform
+
+  # THE UNIVERSE   the SEC register by default (3_baskets/universe.py). Point universe_csv at a
+  #                Bloomberg extract to use an investable list instead — nothing reads it yet.
+  universe_csv: null
+
+  # WORD -> COMPANY  news names brands, the register names legal entities: no listed company is
+  #                  called `google` or `iphone`. A model translates before the lookup.
+  llm_model: null          # null skips the translation: only words that ARE registered names match
+
+  # HOW MANY         first top_n companies in vocabulary order, equal weight
+  top_n: 10
+
+# ======================================================================================
+# 4 · BACKTEST — what holding that basket on that rule was worth
+# ======================================================================================
+backtest:
+  benchmark: SPY
+  rebalance_months: 3
+  price_max_age_days: 7   # refresh a cached price series after a week
+
+  # Only read when basket.method is `filings`.

@@ -26,7 +26,6 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))   # theme_detect lives in scripts/
 from theme_detect import detect_theme, EXTRACT_STOP, TERM_STOP, TOKEN_RE
 
 # reuse theme_detect's finance/boilerplate stopword sets so the BOW vocabulary drops the

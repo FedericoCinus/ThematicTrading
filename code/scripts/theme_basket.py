@@ -48,11 +48,9 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))   # theme_detect lives in scripts/
 from theme_detect import _load_env
 
-_ROOT = Path(__file__).resolve().parent                      # code/
+_ROOT = Path(__file__).resolve().parent.parent          # code/, one above scripts/
 EDGAR_DIR = _ROOT / "data" / "raw" / "edgar"
 TICKER_CSV = _ROOT / "data" / "raw" / "tickers" / "ticker_list_US.csv"
 EFTS_URL = "https://efts.sec.gov/LATEST/search-index"
