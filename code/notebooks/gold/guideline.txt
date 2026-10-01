@@ -1,0 +1,28 @@
+TASK. For one Bloomberg headline and its date, label (1) the named entities and (2) at most ONE economic relation between two actors.
+
+1 · ENTITIES
+List every organisation (ORG) and every person (PERSON) named in the headline, as written.
+- ORG: companies, banks, funds, brokers, regulators and government agencies, courts, universities, news outlets. PERSON: named people.
+- Not entities: countries, cities, regions (Russia, UK, NYC); products, drugs, apps, projects; securities and instruments (bonds, bills, AT1s, shares); indices; currencies; generic groups (chipmakers, investors, holders, banks).
+- Write the surface form without possessive ('s / ’s): "Google’s AI Chatbot" -> Google. Keep multiword names whole ("Pioneer Natural Resources", "Goldman Sachs").
+- A country adjective + company is the company only: "Indonesia’s PP" -> PP; "Switzerland’s Terra Quantum" -> Terra Quantum.
+- Named sources are entities too ("..., Nikkei Says" -> Nikkei; "...: FAZ" -> FAZ).
+
+2 · RELATION
+Label a relation only if the headline itself asserts or reports one of these between two ECONOMIC ACTORS:
+  acquires      buys / takes over / agrees, plans, offers or nears a deal to buy a company, business unit or controlling stake; a takeover bid or approach counts.
+  sells         sells / divests / exits / cuts a holding or unit, to someone or in some company. "X Stake Falls to 6%: Y" -> Y sells X.
+  invests in    takes or raises a minority stake, invests capital, funds a round, or an insider buys shares. "X Stake Rises to 27%: Y" -> Y invests in X. "X 11.6% Stake Reported by Y" -> Y invests in X.
+  supplies      supplies / ships / delivers goods or services to, or wins a supply contract from, the other actor.
+  partners with signs a deal, agreement, partnership, JV, licensing or collaboration that is not an acquisition or investment.
+  sues          files a lawsuit or legal claim against the other actor.
+ECONOMIC ACTORS are companies, banks, investment firms and funds, sovereign wealth funds, and individuals acting as investors or dealmakers (e.g. Elon Musk buying Twitter). NOT actors: governments, countries, regulators, agencies, courts, central banks, politicians acting officially, news outlets.
+Label NONE when the headline is: an analyst rating or price-target change (even with "Buy"/"Sell"); a bond, bill or note issue; a share buyback; a commodity tender; a proxy vote ("Backs X on 3 of 4 Proposals"); a purchase or sale of something that is not a company (bonds, buildings, power plants, apps, projects, gold) unless both parties are named economic actors — see the boundary rules; a deal whose counterparty is not named; a deal that is withdrawn, terminated, rejected, blocked or abandoned in this headline; a regulator or government action; macro or market-move news.
+SUBJECTS = the actor performing the predicate (buyer, seller, investor, supplier, plaintiff). OBJECTS = the other economic actor. List every acceptable name when more than one fits: joint actors ("ADIA, GIC Nearing Stake" -> subjects [ADIA, GIC]); "Lukoil Sells Refinery ISAB to GOI" -> objects [ISAB, GOI]. For "partners with" either order is fine.
+Words after a final colon are usually the SOURCE ("...: Bloomberg", "...: TOI"), except in stake filings ("X Stake Falls to 7%: Nomura Sec.") where they name the holder, who is the subject.
+BOUNDARY RULES (v2 — each applies to every headline):
+- A relation needs TWO NAMED economic actors that transact with each other. What changes hands does not matter: "Copper Road Sells Copper Road Project to Sterling Metals Corp." -> Copper Road sells to Sterling Metals Corp. But if either side is unnamed ("to European Spot Buyer", "Businesses for $50 Million", "a NYC Building", "New Shares" to the public), label NONE.
+- Intentions count when the headline names both sides: "BAT Mulls Selling Stake" in ITC -> BAT sells ITC; "Mulls Options for UniCredit Stake" -> NONE (options are not a sale). Talks "on hold" -> NONE.
+- A country, a government or "the US" is never an actor, even when a state company is meant ("Signs Agreement With Kuwait" -> NONE).
+- When a headline states two relations, every one of them is an acceptable answer ("Ark Funds Buy Blade Air Mobility; Sell Verve Therapeutics" -> Ark invests in Blade Air Mobility OR Ark sells Verve Therapeutics).
+Judge by the headline and its date only. Do not use knowledge of what happened afterwards.

@@ -1,0 +1,37 @@
+{
+ "corpus": "data/processed/news_corpus.parquet",
+ "corpus_rows_2024_distinct_after_exclusion": 909917,
+ "seed": 44,
+ "n_random": 25,
+ "coverage": {
+  "ACTIVE_IN": {
+   "pattern": "\\b(Maker|Startup|Start-Up|Miner|Producer|Developer|Operator)\\b",
+   "n": 4
+  },
+  "OFFERS": {
+   "pattern": "\\b(Launches|Unveils|Introduces|Rolls Out|Debuts)\\b",
+   "n": 4
+  },
+  "INVESTS_IN": {
+   "pattern": "\\b(Invests?|Stake Rises|Takes Stake|Minority Stake)\\b",
+   "n": 3
+  },
+  "ACQUIRES": {
+   "pattern": "\\b(to Buy|to Acquire|Acquires|Takeover)\\b",
+   "n": 3
+  },
+  "PARTNERS_WITH": {
+   "pattern": "\\b(Partners? With|Ties? Up|Joint Venture|Alliance|Teams Up)\\b",
+   "n": 4
+  },
+  "SUPPLIES_TO": {
+   "pattern": "\\b(to Supply|Supplies|Supply Deal|Supply Contract|Wins .*(Order|Contract))\\b",
+   "n": 4
+  },
+  "IMPACTS": {
+   "pattern": "\\b(Lifts|Boosts|Hurts|Weighs on|Hits)\\b|\\bon [A-Z][\\w-]* (Demand|Prices?|Costs?|Tariffs?)\\b",
+   "n": 3
+  }
+ },
+ "excluded": "150 headlines of 0.42 (gold/candidates_2024.json)"
+}

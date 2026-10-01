@@ -1,0 +1,704 @@
+[
+ {
+  "probe_id": "name-fb",
+  "trap_type": "old_name",
+  "date": "2021-03-15",
+  "headline": "Facebook Forges Multiyear Deal With News Corp. in Australia",
+  "relation_pit": {
+   "predicate": "partners with",
+   "subjects": [
+    "Facebook"
+   ],
+   "objects": [
+    "News Corp."
+   ]
+  },
+  "deal_status_pit": "none",
+  "future_names": [
+   "Meta",
+   "Meta Platforms"
+  ],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "2021-10-28",
+  "main_entity_ticker_pit": "FB",
+  "future_ticker": "META",
+  "notes": ""
+ },
+ {
+  "probe_id": "name-sq",
+  "trap_type": "old_name",
+  "date": "2021-03-04",
+  "headline": "Square to Buy Majority Stake in Music-Streaming Service Tidal",
+  "relation_pit": {
+   "predicate": "acquires",
+   "subjects": [
+    "Square"
+   ],
+   "objects": [
+    "Tidal"
+   ]
+  },
+  "deal_status_pit": "announced",
+  "future_names": [
+   "Block",
+   "Block Inc"
+  ],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "2021-12-01",
+  "main_entity_ticker_pit": "SQ",
+  "future_ticker": "XYZ",
+  "notes": ""
+ },
+ {
+  "probe_id": "name-tw",
+  "trap_type": "old_name",
+  "date": "2022-11-02",
+  "headline": "L’Oréal Suspends Advertising Spending on Twitter, FT Says",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [
+   "X Corp",
+   "X Corp."
+  ],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "2023-07-23",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "ren-3",
+  "trap_type": "old_name",
+  "date": "2023-02-09",
+  "headline": "Kellogg Won’t Divest Plant-Based Unit Amid Category ‘Shakeout’",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [
+   "Kellanova"
+  ],
+  "future_counterparties": [
+   "Mars"
+  ],
+  "future_predicate": "",
+  "future_status": "Snack company named Kellanova and cereal spin-off named WK Kellogg Co (announced 2023-03-15); spin-off completed and Kellogg Co renamed Kellanova on 2023-10-02 (Kellanova kept K, WK Kellogg listed as KLG); Mars agreed to buy Kellanova (2024-08-14), all regulatory approvals received by 2025-12-08, closed 2025-12-11 (Kellanova delisted)",
+  "first_public_date": "2023-03-15",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "ren-4",
+  "trap_type": "old_name",
+  "date": "2023-11-13",
+  "headline": "AerCap Holdings Holder General Electric Offers 26.7m Shares",
+  "relation_pit": {
+   "predicate": "sells",
+   "subjects": [
+    "General Electric"
+   ],
+   "objects": [
+    "AerCap Holdings",
+    "AerCap"
+   ]
+  },
+  "deal_status_pit": "announced",
+  "future_names": [
+   "GE Aerospace"
+  ],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "GE Vernova spun off on 2024-04-02 (NYSE: GEV); the remaining General Electric Company (legal name unchanged) began operating as GE Aerospace and kept ticker GE",
+  "first_public_date": "2024-04-02",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "bank-1",
+  "trap_type": "future_buyer",
+  "date": "2023-03-16",
+  "headline": "Credit Suisse Erupts Into Full-Blown Crisis as Rivals Back Away",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "UBS"
+  ],
+  "future_predicate": "",
+  "future_status": "acquired: UBS agreed a Swiss-government-brokered takeover on 2023-03-19 (all-stock, about CHF3bn; about CHF16.5bn of AT1 bonds written off by FINMA); deal completed and Credit Suisse delisted from SIX and NYSE on 2023-06-12 (1 UBS share per 22.48 CS shares)",
+  "first_public_date": "2023-03-19",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "bank-2",
+  "trap_type": "future_buyer",
+  "date": "2023-03-09",
+  "headline": "SVB CEO Becker Asks Silicon Valley Bank Clients to ‘Stay Calm’",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "First Citizens",
+   "First Citizens BancShares"
+  ],
+  "future_predicate": "",
+  "future_status": "failed: closed by California DFPI with the FDIC as receiver on 2023-03-10 (Silicon Valley Bridge Bank); parent SVB Financial Group filed for Chapter 11 on 2023-03-17; the FDIC announced on 2023-03-26 that First-Citizens Bank & Trust (First Citizens BancShares) would assume all deposits and loans (branches reopened under First Citizens on 2023-03-27)",
+  "first_public_date": "2023-03-26",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "bank-3",
+  "trap_type": "future_buyer",
+  "date": "2023-04-24",
+  "headline": "First Republic Sinks After Deposits Fall, Guidance Withdrawn",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "JPMorgan",
+   "JPMorgan Chase"
+  ],
+  "future_predicate": "",
+  "future_status": "failed: closed by California DFPI with the FDIC as receiver on 2023-05-01; JPMorgan Chase Bank, N.A. assumed all deposits and substantially all assets under a purchase-and-assumption agreement; FRC delisted",
+  "first_public_date": "2023-05-01",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "tech-1",
+  "trap_type": "future_buyer",
+  "date": "2022-02-24",
+  "headline": "VMware Shares Decline After Forecast Falls Short of Estimates",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "Broadcom"
+  ],
+  "future_predicate": "",
+  "future_status": "acquired by Broadcom (~$61B cash+stock, agreed 2022-05-26, closed 2023-11-22; VMW delisted)",
+  "first_public_date": "2022-05-26",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "tech-5",
+  "trap_type": "future_buyer",
+  "date": "2023-02-15",
+  "headline": "Seagen 2023 Revenue Forecast Misses Estimates",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "Pfizer"
+  ],
+  "future_predicate": "",
+  "future_status": "acquired by Pfizer (~$43B, agreed 2023-03-13, closed 2023-12-14; SGEN delisted)",
+  "first_public_date": "2023-03-13",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "anon-ibm",
+  "trap_type": "future_buyer",
+  "date": "2022-01-05",
+  "headline": "IBM Gains After Reportly Exploring Sale of Watson Health",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "Francisco Partners"
+  ],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "2022-01-21",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "anon-hmh",
+  "trap_type": "future_buyer",
+  "date": "2022-01-14",
+  "headline": "Education Company Houghton Mifflin Is Said to Explore Sale",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "Veritas Capital",
+   "Veritas"
+  ],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "2022-02-22",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "anon-cw",
+  "trap_type": "future_buyer",
+  "date": "2022-01-06",
+  "headline": "ViacomCBS, WarnerMedia Said to Explore Sale of the CW Network",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "Nexstar"
+  ],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "2022-08-15",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "late-3",
+  "trap_type": "future_buyer",
+  "date": "2024-01-17",
+  "headline": "Discover Financial Profit Plunges 62% as Compliance Costs Bite",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "Capital One"
+  ],
+  "future_predicate": "",
+  "future_status": "acquired: Capital One agreed an all-stock deal (~$35.3B, 1.0192 COF shares per DFS share) on 2024-02-19; completed 2025-05-18 after Fed/OCC approval (2025-04-18), and DFS was delisted",
+  "first_public_date": "2024-02-19",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "late-5",
+  "trap_type": "future_buyer",
+  "date": "2024-08-01",
+  "headline": "Kellanova Raises Its Outlook, Sidestepping Grocery Slowdown",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "Mars"
+  ],
+  "future_predicate": "",
+  "future_status": "acquired: Mars agreed to buy Kellanova for $83.50/share in cash (~$35.9B including debt) on 2024-08-14; all regulatory approvals (including the long EU review) came by 2025-12-08, the deal completed 2025-12-11, and K was delisted",
+  "first_public_date": "2024-08-14",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "co-jpm",
+  "trap_type": "co_mention",
+  "date": "2023-03-16",
+  "headline": "JPMorgan, Morgan Stanley in Talks to Bolster First Republic: WSJ",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "JPMorgan"
+  ],
+  "future_predicate": "acquires",
+  "future_status": "",
+  "first_public_date": "2023-05-01",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "co-ubs",
+  "trap_type": "co_mention",
+  "date": "2022-11-24",
+  "headline": "Credit Suisse Clients Flee to UBS in Asia as Rich Weigh Options",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [
+   "UBS"
+  ],
+  "future_predicate": "acquires",
+  "future_status": "",
+  "first_public_date": "2023-03-19",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "co-spr",
+  "trap_type": "co_mention",
+  "date": "2022-04-12",
+  "headline": "Boeing Chooses Spirit Aerosystems as Project Structures Partner",
+  "relation_pit": {
+   "predicate": "partners with",
+   "subjects": [
+    "Boeing"
+   ],
+   "objects": [
+    "Spirit Aerosystems"
+   ]
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "acquires",
+  "future_status": "",
+  "first_public_date": "2024-03-01",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "deal22-1",
+  "trap_type": "failed_deal",
+  "date": "2022-09-15",
+  "headline": "Adobe Agrees to Buy Figma in $20 Billion Software Deal",
+  "relation_pit": {
+   "predicate": "acquires",
+   "subjects": [
+    "Adobe"
+   ],
+   "objects": [
+    "Figma"
+   ]
+  },
+  "deal_status_pit": "announced",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "terminated",
+  "first_public_date": "2023-12-18",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "deal22-2",
+  "trap_type": "failed_deal",
+  "date": "2022-10-14",
+  "headline": "Kroger to Buy Albertsons for $34.10/Shr Estimated Consideration",
+  "relation_pit": {
+   "predicate": "acquires",
+   "subjects": [
+    "Kroger"
+   ],
+   "objects": [
+    "Albertsons"
+   ]
+  },
+  "deal_status_pit": "announced",
+  "future_names": [],
+  "future_counterparties": [
+   "C&S Wholesale Grocers"
+  ],
+  "future_predicate": "",
+  "future_status": "terminated",
+  "first_public_date": "2024-12-10",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "deal22-3",
+  "trap_type": "failed_deal",
+  "date": "2022-07-28",
+  "headline": "JetBlue Agrees to Acquire Spirit Air for $3.8 Billion in Cash",
+  "relation_pit": {
+   "predicate": "acquires",
+   "subjects": [
+    "JetBlue"
+   ],
+   "objects": [
+    "Spirit Air"
+   ]
+  },
+  "deal_status_pit": "announced",
+  "future_names": [],
+  "future_counterparties": [
+   "Frontier"
+  ],
+  "future_predicate": "",
+  "future_status": "terminated",
+  "first_public_date": "2024-01-16",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "deal22-4",
+  "trap_type": "failed_deal",
+  "date": "2022-08-05",
+  "headline": "Amazon to Buy Roomba-Maker IRobot for $1.65 Billion",
+  "relation_pit": {
+   "predicate": "acquires",
+   "subjects": [
+    "Amazon"
+   ],
+   "objects": [
+    "IRobot"
+   ]
+  },
+  "deal_status_pit": "announced",
+  "future_names": [],
+  "future_counterparties": [
+   "Picea"
+  ],
+  "future_predicate": "",
+  "future_status": "terminated",
+  "first_public_date": "2024-01-29",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "deal22-5",
+  "trap_type": "failed_deal",
+  "date": "2022-11-08",
+  "headline": "Crypto Exchange Binance to Buy Rival FTX.com; Terms Undisclosed",
+  "relation_pit": {
+   "predicate": "acquires",
+   "subjects": [
+    "Binance"
+   ],
+   "objects": [
+    "FTX.com"
+   ]
+  },
+  "deal_status_pit": "announced",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "terminated",
+  "first_public_date": "2022-11-09",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "deal23-5",
+  "trap_type": "failed_deal",
+  "date": "2022-07-08",
+  "headline": "Elon Musk Terminates Twitter Merger Agreement",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "terminated",
+  "future_names": [
+   "X",
+   "X Corp"
+  ],
+  "future_counterparties": [
+   "xAI"
+  ],
+  "future_predicate": "",
+  "future_status": "completed",
+  "first_public_date": "2022-10-27",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "ctrl-1",
+  "trap_type": "control",
+  "date": "2023-05-22",
+  "headline": "Chevron to Buy PDC Energy for $72 per Share",
+  "relation_pit": {
+   "predicate": "acquires",
+   "subjects": [
+    "Chevron"
+   ],
+   "objects": [
+    "PDC Energy"
+   ]
+  },
+  "deal_status_pit": "announced",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "ctrl-2",
+  "trap_type": "control",
+  "date": "2023-02-13",
+  "headline": "Liberty Global Buys 4.92% Stake in Vodafone Group",
+  "relation_pit": {
+   "predicate": "invests in",
+   "subjects": [
+    "Liberty Global"
+   ],
+   "objects": [
+    "Vodafone Group"
+   ]
+  },
+  "deal_status_pit": "completed",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "ctrl-4",
+  "trap_type": "control",
+  "date": "2023-02-13",
+  "headline": "Maersk Sues Evergreen Over Suez Blockage, ShippingWatch Says",
+  "relation_pit": {
+   "predicate": "sues",
+   "subjects": [
+    "Maersk"
+   ],
+   "objects": [
+    "Evergreen"
+   ]
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "ctrl-cost",
+  "trap_type": "control",
+  "date": "2022-06-02",
+  "headline": "Costco May Total Comparable Sales Beats Estimates",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "ctrl-hd",
+  "trap_type": "control",
+  "date": "2022-08-16",
+  "headline": "Home Depot 2Q Comparable Sales Beats Estimates",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ },
+ {
+  "probe_id": "ctrl-cat",
+  "trap_type": "control",
+  "date": "2022-07-29",
+  "headline": "Caterpillar Climbs a Third Day Ahead of Next Week’s Earnings",
+  "relation_pit": {
+   "predicate": "none",
+   "subjects": [],
+   "objects": []
+  },
+  "deal_status_pit": "none",
+  "future_names": [],
+  "future_counterparties": [],
+  "future_predicate": "",
+  "future_status": "",
+  "first_public_date": "",
+  "main_entity_ticker_pit": "",
+  "future_ticker": "",
+  "notes": ""
+ }
+]

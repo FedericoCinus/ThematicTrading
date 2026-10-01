@@ -1,0 +1,28 @@
+GUIDELINE 044-v1 — schema 0.3 (notebook 0.43). The gold annotator and the models read this same text.
+
+TASK. For one news headline and its date, list the entities, the events and the claims that the headline itself states. Use only the headline and what was known on its date. Never add tickers, modern names, parent companies, counterparties, sectors or outcomes from memory. Empty lists and null are valid answers.
+
+1 · ENTITIES — every named thing of these 7 types; `mention` is copied verbatim from the headline (drop a possessive 's).
+- COMPANY: firms, banks, brokers, asset managers, funds as investing organisations, news agencies. Not ETFs, shares or share classes.
+- ORGANIZATION: governments, ministries, regulators, central banks, agencies, courts, universities, international bodies.
+- PRODUCT: an identifiable good or service, including traded commodities (oil, copper, LNG), drugs, devices, software, AI models.
+- CONCEPT: a technology, process, policy or economic idea named in the text (carbon capture, tariffs, generative AI).
+- SECTOR: an industry or market named in the text (chipmakers, biotech, banks as a sector).
+- LOCATION: a country, region or city named as a noun. A nationality adjective ("German", "Indonesia's") is not an entity.
+- INDICATOR: a measurable variable (revenue, profit, sales, demand, prices, capacity, output, rates, inflation, jobs). `owner_id` = the entity whose variable it is, when the text says so ("Alba's revenue", "copper prices" -> owner copper). owner_id is a field, not a role.
+Not entities: people, securities (bonds, bills, notes, shares), indices, currencies, generic groups ("investors", "holders").
+
+2 · EVENTS — one per distinct fact the headline reports: a deal, investment, launch, plan, supply contract, result, change in a variable, regulatory action.
+Not events: a stock or market move by itself, an analyst rating or price target, a routine bond/bill auction or issue, a buyback.
+Fields: `trigger` = the verbatim word(s) that state the fact ("to Buy", "Launches", "Plans"); `description` = a short paraphrase of the headline only; `driver` = SUPPLY, DEMAND, REVENUE, EFFICIENCY_COST, STRATEGIC_ACTION, TECHNOLOGY_INNOVATION, POLICY_REGULATION or MACRO, or null if unclear; `actor_ids` = COMPANY/ORGANIZATION doing it (may be empty); `target_ids` = what it acts on or is about (company acquired, customer, product, indicator, concept); `modality`; `event_time` only if the headline states a date or period; `evidence` = verbatim span.
+Modality: reported (done or agreed as fact: "Buys", "Signs", "Wins", "Rises"); planned ("to", "Plans", "Agrees to", "Offers to", "Nears", "Seeks"); forecast (expects, sees, projects, "Will" in a forecast); uncertain (mulls, weighs, considers, in talks, may, "Said to", reports); negated (denies, rejects, no plans, withdraws, scraps, terminated, on hold).
+
+3 · CLAIMS — typed edges. The first five are the typed version of an event and need its `event_id`; ACTIVE_IN and IMPACTS have event_id = null.
+- ACQUIRES (COMPANY -> COMPANY): buys, takes control of, bids or offers for a company or a named unit. A stake without control is INVESTS_IN.
+- INVESTS_IN (COMPANY/ORGANIZATION -> COMPANY, PRODUCT, CONCEPT, SECTOR, LOCATION): a minority stake or insider purchase in a company, or declared spending on a product, technology, sector or place. "X Stake Rises to 11%: Y" -> Y INVESTS_IN X.
+- PARTNERS_WITH (COMPANY <-> COMPANY): agreement, alliance, JV, licence, collaboration that is not an acquisition or investment. Order does not matter.
+- SUPPLIES_TO (COMPANY -> COMPANY/ORGANIZATION): supplier -> customer, including a supply contract won. product_id = the good or service if named.
+- OFFERS (COMPANY/ORGANIZATION -> PRODUCT, CONCEPT): the text reports that the subject launches, introduces, produces or provides it.
+- ACTIVE_IN (COMPANY -> SECTOR, CONCEPT, PRODUCT, LOCATION): the text qualifies what the company does or is exposed to, in any position ("Bitcoin Miner X", "X, a Solar Developer", "X's Chip Unit"). The object is the good, technology or industry word, not the role noun: "Chip Maker X" -> PRODUCT "Chip"; "Energy Firm X" -> SECTOR "Energy"; "Carbon Capture Startup X" -> CONCEPT "Carbon Capture". If the sentence states a single launch or production, use OFFERS instead, not both. A nationality is not ACTIVE_IN.
+- IMPACTS (CONCEPT, PRODUCT, EVENT, ORGANIZATION, INDICATOR -> COMPANY, SECTOR, PRODUCT, INDICATOR): an effect the text states with a causal marker ("on", "due to", "thanks to", "because of") or an effect verb ("lifts", "boosts", "hits", "hurts", "weighs on", "drives"). "After" and "as" alone only state sequence or simultaneity: no IMPACTS. impact_polarity: positive/negative when the text says the object rises or benefits / falls or is hurt; null for a product or indicator unless benefit or harm is stated. A stock move with a stated cause ("X Jumps on AI Demand") gives IMPACTS cause -> X; the move itself is not an event. A rating with a stated cause ("Raised to Buy at Y on Z") gives IMPACTS Z -> X with modality forecast; no claim between the broker and the company.
+Rules for all claims: both ends must be entities or events of this record. Countries, governments, regulators and courts are never subject or object of ACQUIRES, PARTNERS_WITH or INVESTS_IN towards a company. A deal whose counterparty is unnamed, or that is withdrawn, rejected, terminated or on hold, gives an event but no claim. A sale with a named buyer is the buyer's ACQUIRES (control) or INVESTS_IN (minority). Co-mention alone is never a claim. `evidence` is a verbatim span containing both ends (for an event end, its trigger).
