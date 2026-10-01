@@ -1,0 +1,25 @@
+# Study configuration, loaded separately from the pipeline's Hydra configuration.
+# Run with run.py in this directory; use --check to validate local prerequisites.
+pipeline_experiment: default   # Resolved by code/src-deliverable/config.py via Hydra.
+llm_budget_usd: 5.0            # Per run, including restarts; CLI --budget-usd overrides.
+
+study:
+  name: weekly_qualitative
+  attempt: chatgpt_01
+  start: "2022-10-03"
+  weeks: 16                   # Weekly cutoffs through 2023-01-16 inclusive.
+  step_days: 7
+  cutoff: "00:00:00 UTC"      # Only news strictly before this Monday's cutoff.
+  horizons_weeks: [13, 26, 52]
+  benchmark: SPY
+  entry: first_price_date_after_first_detection
+  weighting: equal
+  rebalance: false
+  exit: fixed_horizon
+  # Relative to repository root; runner appends -<config_hash>.
+  output_dir: "experiments/${study.name}/results/${study.attempt}-${study.start}-${study.weeks}w"
+  format: csv
+  positive_file: positive.csv
+  negative_file: negative.csv
+  row_key: [asof, theme_id]
+  review_sample: 40

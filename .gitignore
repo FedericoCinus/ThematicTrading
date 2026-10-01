@@ -22,10 +22,11 @@ repositories/
 data/
 output/
 notebooks/output/
+experiments/*/results/
 
 # Binary documents
-*.pdf
-*.png
+#*.pdf
+#*.png
 
 # LaTeX build artifacts
 *.aux
