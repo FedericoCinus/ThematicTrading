@@ -29,4 +29,21 @@ dependencies = [
     "transformers>=5.8.1",
     "umap-learn>=0.5.12",
     "yfinance>=1.5.2",
+    # imported directly by notebooks and scripts (before: only transitive)
+    "huggingface-hub>=1.15.0",
+    "ipython>=9.13.0",
+    "loguru>=0.7.3",
+    "omegaconf>=2.3.1",
+    "openai>=2.41.0",
+    "plotly>=6.7.0",
+    "pyarrow>=24.0.0",
+    "pydantic>=2.13.4",
+    "scipy>=1.17.1",
+    "tqdm>=4.67.3",
+    # NER (notebooks 0.20, 0.41): spaCy and its English models, from the spaCy release wheels
+    "spacy>=3.8.14",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+    "en-core-web-trf @ https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.8.0/en_core_web_trf-3.8.0-py3-none-any.whl",
 ]
+# GLiNER2 (notebooks 0.44-0.45) needs transformers 4.x and lives in a separate env: see requirements-gliner.txt.
+# Qwen3-30B-A3B runs in llama.cpp (brew install llama.cpp), outside Python.
