@@ -14,6 +14,7 @@ import re
 import polars as pl
 
 import config
+import llm
 from importlib import import_module
 
 universe = import_module("3_baskets.universe")
@@ -47,8 +48,8 @@ progress = import_module("progress")
 #                     only because the model reads a company out of a bigram.
 #   order             vocabulary order: how often the word shares a headline with the anchor
 #
-#   LEFT OVER   the model must spell a company as the register does: `meta` where the register
-#               says `meta platforms` finds nothing, silently, like every miss here
+#   Names are normalized on both sides; only explicit aliases extend exact matching.
+#   Distinct CIKs with the same normalized name are ambiguous and never bought automatically.
 #   LEFT OVER   today's registrants only, and the theme's entry date is never enforced
 #                                                              → FUTUREWORK_uniform.md
 # ======================================================================================
@@ -101,7 +102,6 @@ def issuers(vocab: list[str], model: str | None) -> list[tuple[str, str]]:
 
     import os
 
-    from openai import OpenAI
     from pydantic import BaseModel
 
     if not os.environ.get("OPENAI_API_KEY"):
@@ -117,17 +117,54 @@ def issuers(vocab: list[str], model: str | None) -> list[tuple[str, str]]:
     class Owners(BaseModel):
         owners: list[Owner]
 
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], base_url=os.environ.get("OPENAI_BASE_URL") or None)
-    answer = client.beta.chat.completions.parse(
-        model=model, temperature=0, response_format=Owners,
-        messages=[{"role": "system", "content": ISSUERS},
-                  {"role": "user", "content": "Words: " + ", ".join(vocab)}])
+    def batch(words):
+        answer = llm.parse(
+            stage="issuers", model=model, response_format=Owners, max_completion_tokens=4096,
+            messages=[{"role": "system", "content": ISSUERS},
+                      {"role": "user", "content": "Words: " + ", ".join(words)}])
+        return [o for o in answer.owners if o.word.lower() in words]
+
+    owners = llm.batches(vocab, batch)
 
     rank = {w: i for i, w in enumerate(vocab)}
     pairs = [(o.word.lower(), c.lower())
-             for o in answer.choices[0].message.parsed.owners for c in o.companies
+             for o in owners for c in o.companies
              if c.strip().lower() not in ("", "nothing", "none", "n/a")]
     return sorted(pairs, key=lambda pair: rank.get(pair[0], len(vocab)))
+
+
+ALIASES = {"jpmorgan": "jpmorgan chase"}
+
+
+def resolve(companies: list[str], names: pl.DataFrame) -> list[dict]:
+    """Exact normalized name first, then a one-hop explicit alias, never fuzzy matching.
+
+    Multiple tickers sharing a CIK are one issuer (first register ticker retained).
+    Multiple distinct CIKs are ambiguous: do not pick any ticker or try an alias.
+    Rebuild stems from company when available, including for old cached universes.
+    """
+    index = {}
+    for row in names.to_dicts():
+        key = universe.stem(row.get("company") or row["stem"])
+        if key:
+            index.setdefault(key, []).append(row)
+    resolved = []
+    for company in companies:
+        normalized = universe.stem(company)
+        key, method = normalized, "exact"
+        candidates = index.get(key, [])
+        if not candidates and key in ALIASES:
+            key, method = universe.stem(ALIASES[key]), "alias"
+            candidates = index.get(key, [])
+        ciks = {r["cik"] for r in candidates}
+        status = "unmatched" if not candidates else "matched" if len(ciks) == 1 and None not in ciks else "ambiguous"
+        chosen = candidates[0] if status == "matched" else None
+        resolved.append({"input_company": company, "normalized_company": normalized,
+                         "lookup_company": key, "match_method": method, "match_status": status,
+                         "candidate_tickers": [r["ticker"] for r in candidates],
+                         "ticker": chosen["ticker"] if chosen else None,
+                         "company": key, "cik": chosen["cik"] if chosen else None})
+    return resolved
 
 
 def matches(companies: list[str], names: pl.DataFrame) -> list[str]:
@@ -137,15 +174,18 @@ def matches(companies: list[str], names: pl.DataFrame) -> list[str]:
             names       the universe, [ticker, stem, cik]
     OUTPUT  one ticker per company found, in the order asked
 
-    Matched against `stem`, so the name must BE the company: `apple` finds Apple Inc. and not Apple
-    Hospitality REIT. Deduplicated by cik, so Alphabet's four share classes take one slot, not four.
+    Both sides are normalized; explicit aliases are tried only if there is no exact match.
+    Distinct CIKs are rejected with a warning; share classes of one CIK take one slot.
     """
     found, seen = [], set()
-    for company in companies:
-        for ticker, cik in names.filter(pl.col("stem") == company).select("ticker", "cik").iter_rows():
-            if cik not in seen:
-                seen.add(cik)
-                found.append(ticker)
+    import warnings
+    for row in resolve(companies, names):
+        if row["match_status"] == "ambiguous":
+            warnings.warn(f"ambiguous company {row['input_company']!r}: {row['candidate_tickers']}",
+                          UserWarning, stacklevel=2)
+        if row["match_status"] == "matched" and row["cik"] not in seen:
+            seen.add(row["cik"])
+            found.append(row["ticker"])
     return found
 
 
@@ -159,10 +199,10 @@ def weights(themes: pl.DataFrame, names: pl.DataFrame | None = None, *, top_n: i
             top_n       how many names a theme holds, in vocabulary order
             llm_model   which model translates word into company; None skips that step
     OUTPUT  weights       [theme, ticker, weight] — equal weight, summing to 1 per theme
-            diagnostics   [theme, ticker, company, word] — which word put each ticker in the basket
+            diagnostics   held matches plus unmatched/ambiguous proposals (ticker=null),
+                          with original/normalized names, match method and candidate tickers
     """
     names = universe.load() if names is None else names
-    stem = dict(zip(names["ticker"], names["stem"]))
     # `vocab_wide` keeps the names too common for the monitor to count by, which are exactly the
     # large listed ones this stage can buy. A themes frame without that column still works.
     column = "vocab_wide" if "vocab_wide" in themes.columns else "vocab"
@@ -170,18 +210,26 @@ def weights(themes: pl.DataFrame, names: pl.DataFrame | None = None, *, top_n: i
     for theme, vocab in progress.each(list(zip(themes["theme"], themes[column])),
                                       "word -> company", on=report, unit="theme"):
         pairs = issuers(list(vocab), llm_model)
-        held = matches([company for _, company in pairs], names)[:top_n]
-        said = {}                                   # company -> the first word that named it
-        for word, company in pairs:
-            said.setdefault(company, word)
+        resolved = resolve([company for _, company in pairs], names)
+        held, seen = [], set()
+        for (word, _), match in zip(pairs, resolved):
+            note = {k: v for k, v in dict(match, theme=theme, word=word).items() if k in _NOTES}
+            if match["match_status"] != "matched":
+                notes.append(note)
+                if report and match["match_status"] == "ambiguous":
+                    print(f"   AMBIGUOUS {match['input_company']}: {match['candidate_tickers']}")
+            elif match["cik"] not in seen and len(held) < top_n:
+                seen.add(match["cik"])
+                held.append(match["ticker"])
+                notes.append(note)
         for ticker in held:
             rows.append({"theme": theme, "ticker": ticker, "weight": 1 / len(held)})
-            notes.append({"theme": theme, "ticker": ticker, "company": stem[ticker],
-                          "word": said.get(stem[ticker], "")})
         if report:
             print(f"   {theme[:34]:36} {len(held):>3} names" + (f"   {', '.join(held[:8])}" if held else "   EMPTY"))
     return pl.DataFrame(rows, schema=_WEIGHTS), pl.DataFrame(notes, schema=_NOTES)
 
 
 _WEIGHTS = {"theme": pl.String, "ticker": pl.String, "weight": pl.Float64}
-_NOTES = {"theme": pl.String, "ticker": pl.String, "company": pl.String, "word": pl.String}
+_NOTES = {"theme": pl.String, "ticker": pl.String, "company": pl.String, "word": pl.String,
+          "input_company": pl.String, "normalized_company": pl.String, "lookup_company": pl.String,
+          "match_method": pl.String, "match_status": pl.String, "candidate_tickers": pl.List(pl.String)}

@@ -74,14 +74,79 @@ RULE = "first-publication-v3"               # bump when the rule changes; invali
 # third-party wires and machine feeds (EDGAR filings), which report no news of their own. The mix
 # shifts hard over time: the 2010 capture carries 3 wires and this keeps 91% of its messages, the
 # 2025 capture carries 189 and this keeps 32%. Codes are from data/raw/wire mapping.xlsx.
-WIRES = ["BN", "BFW", "BBO"]                # Bloomberg News, First Word, Opinion
+# WHICH WIRES — `preprocessing.wires` in the experiment file, resolved here into a list of codes.
+#
+#   bloomberg   the three below: Bloomberg reporting its own news        the default
+#   press       every wire written by a NEWSROOM — Bloomberg, the regional web-content feeds,
+#               the blogs and the 170-odd named mastheads — and nothing written by a company,
+#               a government or a machine. The middle ground, and the one to reach for.
+#   all         every wire in the capture, those four excluded families included
+#   [BN, NS1]   an explicit list, when a preset is not what you mean
+#
+# What `all` lets back in, measured on the 2022 capture for chatgpt|openai: 430 distinct ADD
+# headlines instead of 13, carrying the ticker tags GOOGL 135 · MSFT 133 · AAPL 38 · SSTK 22.
+# What it also lets in is syndication — one Reuters story arriving from ten sites, each under its
+# own prefix — which `first_occurrence` does NOT collapse, because it matches character for
+# character. Measure that before trusting a wider corpus: 430 distinct titles here are 389 stories.
+#
+# The selection names the files this stage writes (config.WIRE_SUFFIX), so two selections coexist.
+_DEFAULT = object()                         # so keep=None ("every wire") differs from "not passed"
+BLOOMBERG_WIRES = config.BLOOMBERG_WIRES    # Bloomberg News, First Word, Opinion
+
+
+# WHAT IS NOT A NEWSROOM — the four families `press` excludes, and why each one is not news.
+#
+# Defined by exclusion on purpose. The press side is ~170 mastheads and it GROWS with every capture
+# — 3 wires in 2010, 161 in 2022, 189 in 2025 — so an allow-list would silently drop each new paper
+# as it arrived. These four families are small, prefix-stable, and named by what wrote them.
+NOT_PRESS = {
+    "EDG": "EDGAR SEC — filing notices written by a machine: `DATTO HOLDING CORP.: 4 2021-12-21`",
+    "PRN": "PR Newswire — a press release is the subject talking about itself",
+    "BUS": "Business Wire — same",
+    "PZM": "GlobeNewswire — same",
+    "DBF": "DGAP — same, German regulatory disclosure",
+}
+NOT_PRESS_PREFIX = ("CO", "GO")             # CO1..CO8 Company Web Content · GO1..GO9 Government Web Content
+
+
+def is_press(code: str | None) -> bool:
+    """INPUT a wire code · OUTPUT whether a newsroom wrote it, rather than a company, a state or a machine."""
+    if not code:
+        return False
+    return code not in NOT_PRESS and not (
+        code[:2] in NOT_PRESS_PREFIX and code[2:].isdigit())
+
+
+def wires() -> list[str] | str | None:
+    """The configured selection, resolved.
+
+    INPUT   nothing — read from the config
+    OUTPUT  a list of codes to keep · None for every wire · the string "press" for the rule above,
+            which cannot be a list because it is a rule ABOUT codes and the codes differ per capture
+    """
+    selection = config.WIRES
+    if selection in ("all", "press"):
+        return None if selection == "all" else "press"
+    if selection == "bloomberg":
+        return list(BLOOMBERG_WIRES)
+    return [str(w) for w in selection]
+
+
+WIRES = wires()                             # list · None ("every wire") · "press" (the rule)
+
+
+def _kept(code: str | None) -> bool:
+    """Whether the configured selection keeps this wire code."""
+    if WIRES is None:
+        return True
+    return is_press(code) if WIRES == "press" else code in WIRES
 
 # `Event` values meaning "this story is being published"; everything else re-transmits an existing one.
 # The 2010 capture holds nothing but these two — UPDATE_ATTRIBUTE appears only in later years, where
 # it grows to dominate, so this filter removes nothing early on and most of the file later.
 ADD_EVENTS = ["ADD_1STPASS", "ADD_STORY"]
 
-TMP = config.PROC / "tmp"                   # per-year builds, disposable
+TMP = config.PROC / f"tmp{config.WIRE_SUFFIX}"   # per-year builds, disposable, one set per wire selection
 
 
 # ======================================================================================
@@ -91,17 +156,30 @@ TMP = config.PROC / "tmp"                   # per-year builds, disposable
 #   keep_published    on Event      drop re-transmissions of stories we keep
 #   first_occurrence  on Headline   drop a title already published, verbatim, before
 # ======================================================================================
-def keep_wires(messages: pl.DataFrame, report: bool = True) -> pl.DataFrame:
+def keep_wires(messages: pl.DataFrame, report: bool = True, *,
+               keep: list[str] | None = _DEFAULT) -> pl.DataFrame:
     """Keep the wires that report news of their own.
 
     INPUT   messages   raw feed rows: [Headline, CaptureTime, WireName, Event]
-    OUTPUT  the same columns, only the rows on WIRES that carry a headline
+            keep       wire codes to keep · None keeps every wire · "press" keeps the newsrooms,
+                       resolved against the codes this capture actually carries. Defaults to the
+                       configured selection — pass it only to override the experiment file.
+    OUTPUT  the same columns, only the rows on `keep` that carry a headline
+
+    With `keep=None` this stops being a wire filter and only drops the headline-less rows. That is
+    the point of the `all` selection: the feed carries syndicated web content, already dated and
+    already ticker-tagged, and the default throws it away.
     """
-    ok = pl.col("WireName").is_in(WIRES) & pl.col("Headline").is_not_null()
-    kept = messages.filter(ok)
-    _step(report, "keep the Bloomberg wires", messages, kept,
-          _example(messages.filter(~ok), "WireName"))
-    return kept
+    keep = WIRES if keep is _DEFAULT else keep
+    has_headline = pl.col("Headline").is_not_null()
+    if keep == "press":                      # a rule about codes: resolve it against this capture's
+        keep = [c for c in messages["WireName"].unique().to_list() if is_press(c)]
+        what = "keep the newsrooms"
+    else:
+        what = "keep every wire" if keep is None else "keep the named wires"
+    ok = has_headline if keep is None else pl.col("WireName").is_in(keep) & has_headline
+    _step(report, what, messages, messages.filter(ok), _example(messages.filter(~ok), "WireName"))
+    return messages.filter(ok)
 
 
 def keep_published(messages: pl.DataFrame, report: bool = True) -> pl.DataFrame:
@@ -182,13 +260,17 @@ def describe(messages: pl.DataFrame) -> None:
     print( "             CaptureTime when this message was transmitted — not when the story was published")
 
     names = _wire_names()
-    wires = messages["WireName"].value_counts(sort=True)
-    print(f"\n   WireName  which wire carried it — {messages['WireName'].n_unique()} in this capture, {len(WIRES)} kept")
-    for row in wires.head(8).to_dicts():
+    counts = messages["WireName"].value_counts(sort=True)
+    kept = sum(_kept(c) for c in counts["WireName"])
+    print(f"\n   WireName  which wire carried it — {counts.height} in this capture, {kept} kept"
+          f"   [preprocessing.wires: {config.WIRES}]")
+    for row in counts.head(8).to_dicts():
         code = row["WireName"]
-        print(f"      {'keep' if code in WIRES else '    '}  {code:<5} {row['count']:>11,}  {names.get(code, '')}")
-    if len(wires) > 8:
-        print(f"            ... and {len(wires) - 8} more, all dropped")
+        mark = "keep" if _kept(code) else "    "
+        print(f"      {mark}  {code:<5} {row['count']:>11,}  {names.get(code, '')}")
+    if counts.height > 8:
+        rest = sum(_kept(r["WireName"]) for r in counts.tail(counts.height - 8).to_dicts())
+        print(f"            ... and {counts.height - 8} more, {rest} of them kept")
 
     print(f"\n   Event     why the wire sent this message — the column this stage turns on")
     for row in messages["Event"].value_counts(sort=True).to_dicts():

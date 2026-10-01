@@ -72,10 +72,45 @@ PRICES = DATA / "raw" / "prices"                     # Yahoo adjusted-close cach
 # Bloomberg extract instead; nothing reads it today.
 UNIVERSE = Path(CONFIG["basket"]["universe_csv"]) if CONFIG["basket"].get("universe_csv") else None
 
-# stage 1 artifact, the one canonical corpus
+# stage 1 artifact, one canonical corpus PER WIRE SELECTION
+#
+# `preprocessing.wires` decides which wires the corpus is built from, and the selection is part of
+# the corpus's NAME — so the Bloomberg corpus and a wider one sit side by side on disk instead of
+# overwriting each other. Flipping the parameter back and forth costs nothing after the first build;
+# a shared filename would mean a full 16-year rebuild on every flip.
+#
+#   bloomberg   BN · BFW · BBO — Bloomberg's own wires          news_corpus.parquet
+#   press       every wire written by a newsroom                 news_corpus_press.parquet
+#   all         every wire in the capture, machines included     news_corpus_all.parquet
+#   [BN, NS1]   an explicit list                                 news_corpus_w<digest>.parquet
+#
+# The default spells the same paths as before this parameter existed, so an existing corpus and its
+# manifest stay valid and nothing rebuilds.
 PROC = DATA / "processed"
-CORPUS = PROC / "news_corpus.parquet"
-CORPUS_MANIFEST = PROC / "news_corpus_manifest.json"
+
+BLOOMBERG_WIRES = ["BN", "BFW", "BBO"]               # Bloomberg News, First Word, Opinion
+WIRES = CONFIG.get("preprocessing", {}).get("wires", "bloomberg")
+
+
+def _wire_suffix(selection) -> str:
+    """The tag a wire selection adds to every file stage 1 writes. Empty for the default."""
+    if isinstance(selection, str):
+        if selection == "bloomberg":
+            return ""
+        if selection in ("press", "all"):
+            return f"_{selection}"
+        raise ValueError("preprocessing.wires: expected 'bloomberg', 'press', 'all' or a list, "
+                         f"got {selection!r}")
+    codes = sorted(str(w) for w in selection)
+    if codes == sorted(BLOOMBERG_WIRES):             # the default spelled out the long way
+        return ""
+    digest = hashlib.blake2b(",".join(codes).encode(), digest_size=3).hexdigest()
+    return f"_w{digest}"
+
+
+WIRE_SUFFIX = _wire_suffix(WIRES)
+CORPUS = PROC / f"news_corpus{WIRE_SUFFIX}.parquet"
+CORPUS_MANIFEST = PROC / f"news_corpus{WIRE_SUFFIX}_manifest.json"
 
 
 def params(stage: str) -> dict:

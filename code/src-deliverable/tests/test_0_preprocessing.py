@@ -54,4 +54,52 @@ def each_title_appears_once():
     return f"{repeated} titles appear more than once" if repeated else None
 
 
-CHECKS = [one_row_per_headline_per_day, headlines_are_untouched, corpus_shape, each_title_appears_once]
+def wire_selection_is_honoured():
+    """preprocessing.wires picks the wires: a list keeps those, `all` keeps every one"""
+    messages = pl.DataFrame({
+        "Headline":    ["Bloomberg says", "Web says", "Blog says", "Issuer says", "State says",
+                        "Machine says", "Release says", None],
+        "CaptureTime": ["2024-01-01 09:00:00.0"] * 8,
+        "WireName":    ["BN", "NS1", "BLG", "CO1", "GO9", "EDG", "PRN", "BN"],
+        "Event":       ["ADD_STORY"] * 8,
+    })
+    press = ["Bloomberg says", "Web says", "Blog says"]
+    cases = {
+        "an explicit list": (["BN", "NS1"], ["Bloomberg says", "Web says"]),
+        "every wire (None)": (None, [h for h in messages["Headline"] if h]),
+        "the Bloomberg three": (pub.BLOOMBERG_WIRES, ["Bloomberg says"]),
+        "the newsrooms": ("press", press),     # no company, government, machine or press release
+    }
+    for what, (keep, expected) in cases.items():
+        got = pub.keep_wires(messages, report=False, keep=keep)["Headline"].to_list()
+        if got != expected:
+            return f"{what}: kept {got}, expected {expected}"
+    return None                                  # the None headline is dropped by every selection
+
+
+def press_excludes_only_what_no_newsroom_wrote():
+    """`press` is defined by exclusion, so a masthead it has never seen is kept, not dropped"""
+    unseen = ["ZZZ", "NYT", "NS9", "FM4", "WE7", "BBC"]      # codes the rule must never have to know
+    if not all(pub.is_press(c) for c in unseen):
+        return f"dropped one of {unseen} — an allow-list crept in"
+    for code in ("EDG", "PRN", "BUS", "PZM", "DBF", "CO1", "CO8", "GO1", "GO9"):
+        if pub.is_press(code):
+            return f"kept {code}, which no newsroom wrote"
+    if not (pub.is_press("COMEX") and pub.is_press("GOAL")):  # CO/GO prefix, but not CO<digit>
+        return "the CO/GO prefix rule is eating codes that merely start with those letters"
+    return None
+
+
+def wire_selection_names_the_corpus():
+    """two wire selections write two corpora, so neither silently overwrites the other"""
+    if config.WIRE_SUFFIX != config._wire_suffix(config.WIRES):
+        return "config.WIRE_SUFFIX does not match the configured selection"
+    if config._wire_suffix("bloomberg") or config._wire_suffix(sorted(config.BLOOMBERG_WIRES)):
+        return "the default selection must keep the original file names, so nothing rebuilds"
+    distinct = {config._wire_suffix(w) for w in ("bloomberg", "press", "all", ["BN", "NS1"])}
+    return None if len(distinct) == 4 else f"selections collide on {distinct}"
+
+
+CHECKS = [one_row_per_headline_per_day, headlines_are_untouched, corpus_shape, each_title_appears_once,
+          wire_selection_is_honoured, press_excludes_only_what_no_newsroom_wrote,
+          wire_selection_names_the_corpus]

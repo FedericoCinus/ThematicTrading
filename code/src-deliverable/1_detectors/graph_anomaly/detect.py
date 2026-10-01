@@ -14,6 +14,7 @@ from itertools import combinations
 import polars as pl
 
 import progress
+import llm
 
 from . import tokenizer
 
@@ -221,7 +222,7 @@ headlines in front of you.
   none          none of the above.
 """
 
-def is_real(anchor: str, headlines: list[str], model: str) -> bool:
+def is_real(anchor: str, headlines: list[str], model: str, *, audit: dict | None = None) -> bool:
     """Ask whether the headlines have the shape of something that is plainly not a theme.
 
     INPUT   anchor      the term the cluster is built around
@@ -241,7 +242,6 @@ def is_real(anchor: str, headlines: list[str], model: str) -> bool:
     import os
     from typing import Literal
 
-    from openai import OpenAI
     from pydantic import BaseModel
 
     if not os.environ.get("OPENAI_API_KEY"):
@@ -258,13 +258,16 @@ def is_real(anchor: str, headlines: list[str], model: str) -> bool:
         actors: list[str]
         reason: str
 
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], base_url=os.environ.get("OPENAI_BASE_URL") or None)
-    answer = client.beta.chat.completions.parse(
-        model=model, temperature=0, response_format=Verdict,
+    verdict = llm.parse(
+        stage="gate", model=model, response_format=Verdict, max_completion_tokens=2048,
         messages=[{"role": "system", "content": PATTERNS},
                   {"role": "user", "content": f"Cluster term: {anchor}\nHeadlines:\n"
                                               + "\n".join(f"- {h}" for h in headlines[:EXAMPLES])}])
-    return answer.choices[0].message.parsed.pattern == "none"
+    if verdict is None:
+        raise RuntimeError("gate 4 returned no parsed verdict")
+    if audit is not None:
+        audit.update(llm_pattern=verdict.pattern, llm_reason=verdict.reason)
+    return verdict.pattern == "none"
 
 
 # ======================================================================================
@@ -291,10 +294,11 @@ def is_real(anchor: str, headlines: list[str], model: str) -> bool:
 #                + google · iphone                           capped it holds msft alone,
 #                                                            uncapped aapl · googl · msft
 #
-# One model call, on the wider list. `max_doc_freq` then separates them, so the difference between
+# Bounded model calls on the wider list. `max_doc_freq` then separates them, so the difference between
 # the two is exactly the words too common to measure a theme by — and nothing else.
 def vocabulary(corpus, anchor: str, asof: datetime, model: str | None, size: int = -1,
-               max_doc_freq: float = 0.0001, since: datetime | None = None) -> list[str]:
+               max_doc_freq: float = 0.0001, since: datetime | None = None,
+               *, audit: dict | None = None) -> tuple[list[str], list[str]]:
     """What the theme is made of.
 
     INPUT   corpus         the canonical corpus, [Headline, date]
@@ -331,29 +335,35 @@ def vocabulary(corpus, anchor: str, asof: datetime, model: str | None, size: int
     reference = corpus.lazy().filter(pl.col("date").is_between(since, asof))
     everywhere = _too_common(reference, set(company), max_doc_freq)
     partners = [term for term, _ in company.most_common()]
+    if audit is not None:
+        audit["words_before_llm"] = [anchor] + partners
     if not model or not partners:
         return _two(anchor, partners, everywhere, size)
 
-    import os
+    # lowercased because the corpus stores terms lowercase and the model hands back `Microsoft`
+    # intersected with `partners`, not with every term the anchor ever met: the model normalises,
+    # answering `microsoft` when shown `microsoft-backed chatgpt`, and that would walk a word the
+    # frequency cap had just removed straight back in
+    accepted = set(filter_entities(partners, model))
+    kept = [term for term in partners if term in accepted]
+    return _two(anchor, kept, everywhere, size)
 
-    from openai import OpenAI
+
+def filter_entities(partners: list[str], model: str) -> list[str]:
     from pydantic import BaseModel
 
     class Entities(BaseModel):
         entities: list[str]
 
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], base_url=os.environ.get("OPENAI_BASE_URL") or None)
-    answer = client.beta.chat.completions.parse(
-        model=model, temperature=0, response_format=Entities,
-        messages=[{"role": "system", "content": ENTITIES},
-                  {"role": "user", "content": "Terms: " + ", ".join(partners)}])
-    # lowercased because the corpus stores terms lowercase and the model hands back `Microsoft`
-    # intersected with `partners`, not with every term the anchor ever met: the model normalises,
-    # answering `microsoft` when shown `microsoft-backed chatgpt`, and that would walk a word the
-    # frequency cap had just removed straight back in
-    kept = sorted({e.lower() for e in answer.choices[0].message.parsed.entities} & set(partners),
-                  key=lambda t: -company[t])
-    return _two(anchor, kept, everywhere, size)
+    def batch(terms):
+        answer = llm.parse(
+            stage="vocabulary", model=model, response_format=Entities, max_completion_tokens=2048,
+            messages=[{"role": "system", "content": ENTITIES},
+                      {"role": "user", "content": "Terms: " + ", ".join(terms)}])
+        selected = {e.lower() for e in answer.entities}
+        return [term for term in terms if term in selected]
+
+    return llm.batches(partners, batch)
 
 
 def _two(anchor: str, words: list[str], everywhere: set[str], size: int) -> tuple[list[str], list[str]]:
@@ -396,7 +406,8 @@ def detect(corpus, asof: str, *, detect_months: int = 5, baseline_months: int = 
            cluster_max: float = 0.60, cluster_k: int = 15,
            llm_model: str | None = "gpt-4o", llm_max: int = 100,
            theme_bag_of_words_size: int = -1, max_doc_freq: float = 0.0001,
-           report: bool = True, **_) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+           report: bool = True, audit: list | None = None,
+           **_) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     """Find the themes that emerged in the months before `asof`.
 
     INPUT   corpus   the canonical corpus, [Headline, date]
@@ -422,22 +433,45 @@ def detect(corpus, asof: str, *, detect_months: int = 5, baseline_months: int = 
                    persist_weeks=persist_weeks, cluster_max=cluster_max)
     themes = sorted((r for r in rows if r["promoted"]), key=lambda r: -r["degree"])
     promoted = len(themes)                          # before gate 4, so the funnel can be read
+    for row in rows:
+        if not row["promoted"]:
+            row["rejection_stage"] = "statistical"
+            row["rejection_reason"] = ("degree below threshold" if not row["caught"] else
+                "persistence/degree peak/clustering rule not met, or another week selected")
     if llm_model:
         # Judged most connected first, and anything past the cap is dropped rather than waved
         # through: unjudged is not vetted, and a gate that checks only part of the traffic is not a
         # gate. The cap is a cost ceiling, not a sampling rule — raise it if it ever bites.
         if len(themes) > llm_max:
             print(f"   gate 4: {len(themes) - llm_max} themes past llm_max={llm_max} dropped unjudged")
+        for row in themes[llm_max:]:
+            row.update(promoted=False, rejection_stage="llm_max", rejection_reason="not judged: call limit")
         for row in progress.each(themes[:llm_max], "gate 4", on=report, unit="cluster"):
-            row["promoted"] = is_real(row["anchor"], row["examples"], llm_model)
+            row["promoted"] = is_real(row["anchor"], row["examples"], llm_model,
+                                      **({"audit": row} if audit is not None else {}))
+            if not row["promoted"]:
+                row.update(rejection_stage="llm", rejection_reason=row.get("llm_reason", "rejected by LLM"))
         themes = [r for r in themes[:llm_max] if r["promoted"]]
 
     if report:
         _report(weeks, detect_start, asof, rows, promoted, themes, llm_model)
 
     words = {_id(r): vocabulary(corpus, r["anchor"], asof, llm_model, theme_bag_of_words_size,
-                                max_doc_freq, baseline_start)
+                                max_doc_freq, baseline_start,
+                                **({"audit": r} if audit is not None else {}))
              for r in progress.each(themes, "vocabulary", on=report, unit="theme")}
+
+    if audit is not None:
+        dates = defaultdict(list)
+        wanted = {h for r in rows for h in r["examples"]}
+        for h, date in headlines.select("Headline", "date").iter_rows():
+            if h in wanted:
+                dates[h].append(date.isoformat())
+        for row in rows:
+            narrow, wide = words.get(_id(row), (None, None))
+            audit.append(dict(row, detector_theme_id=_id(row), monitor_words=narrow,
+                              words_after_llm=wide,
+                              headlines=[{"headline": h, "dates": dates[h]} for h in row["examples"]]))
 
     return (pl.DataFrame([{"theme": _id(r), "week": r["week"],
                            "vocab": words[_id(r)][0], "vocab_wide": words[_id(r)][1]}

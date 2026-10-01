@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from importlib import import_module
 
 import polars as pl
@@ -51,7 +52,8 @@ TICKER_MAP = "https://www.sec.gov/files/company_tickers.json"
 # lookup demand an exact company rather than a substring: `apple inc.` becomes `apple`, while
 # `apple hospitality reit, inc.` becomes `apple hospitality reit` and no longer answers to `apple`.
 SUFFIX = {"inc", "incorporated", "corp", "corporation", "co", "company", "plc", "ltd", "limited",
-          "holding", "holdings", "group", "sa", "nv", "ag", "se", "the", "class", "com"}
+          "holding", "holdings", "group", "sa", "nv", "ag", "se", "the", "class", "com",
+          "llc", "llp"}
 
 
 def load(force: bool = False) -> pl.DataFrame:
@@ -75,10 +77,16 @@ def load(force: bool = False) -> pl.DataFrame:
 def stem(name: str) -> str:
     """The register name without its corporate tail.
 
-    INPUT   name   a company name as the register spells it, lower case
-    OUTPUT  the same without trailing corporate words: `apple inc.` -> `apple`
+    INPUT   name   a register name or an LLM-proposed company name, in any case
+    OUTPUT  NFKC/casefold, normalized punctuation/spacing and no corporate tail.
+            Internal words are kept: AT&T -> at and t; Carnival Corporation & plc -> carnival.
     """
-    words = [w for w in re.split(r"[^a-z0-9&]+", re.sub(r"/[a-z]{2,4}/", " ", name)) if w]
-    while words and words[-1] in SUFFIX:
+    name = unicodedata.normalize("NFKC", name).casefold()
+    name = re.sub(r"/[a-z]{2,4}/", " ", name)  # SEC jurisdiction annotation, e.g. /CAN/
+    # Dotted legal abbreviations: S.A., N.V., L.L.C., etc.
+    name = re.sub(r"\b(?:[a-z]\.\s*){2,}", lambda m: re.sub(r"[.\s]", "", m[0]) + " ", name)
+    name = name.replace("&", " and ")
+    words = [w for w in re.split(r"[\W_]+", name) if w]
+    while words and words[-1] in SUFFIX | {"and"}:
         words.pop()
     return " ".join(words)

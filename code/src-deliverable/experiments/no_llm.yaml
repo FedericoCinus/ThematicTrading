@@ -12,6 +12,45 @@ data_root: ../data
 # 0 · PREPROCESSING — messages into one dated corpus. No method: there is only one way to do it.
 # ======================================================================================
 preprocessing:
+  # WHICH WIRES the corpus is built from. The selection names the corpus file, so several of them
+  # coexist on disk and flipping back costs nothing after the first build.
+  #
+  #   bloomberg   BN · BFW · BBO — Bloomberg reporting its own news    -> news_corpus.parquet
+  #   press       every wire a NEWSROOM writes                         -> news_corpus_press.parquet
+  #   all         every wire, machines and press releases included     -> news_corpus_all.parquet
+  #   [BN, NS1]   an explicit list                                     -> news_corpus_w<digest>.parquet
+  #
+  # Measured on the 2022 capture, distinct ADD headlines naming chatgpt|openai:
+  #
+  #   bloomberg    13    1.0M stories     3 wires
+  #   press       425    9.9M stories   139 wires   <- the restricted, sensible one
+  #   all         430   12.1M stories   161 wires
+  #
+  # `bloomberg` keeps 13 of 430. The 417 it drops are the regional Web Content feeds (NS*, WE*, FM*)
+  # and Blogs (BLG) — third-party press Bloomberg syndicates — and they carry the ticker tags
+  # GOOGL 135 · MSFT 133 · AAPL 38 · SSTK 22.
+  #
+  # `press` is `all` minus the four families nobody would call journalism: EDG (EDGAR filing notices,
+  # machine-written, 8% of all messages), PRN/BUS/PZM/DBF (press releases — the subject talking about
+  # itself), CO1..CO8 (Company Web Content) and GO1..GO9 (Government Web Content). Defined by
+  # exclusion because the press side grows every year — 3 wires in 2010, 161 in 2022, 189 in 2025 —
+  # so an allow-list would silently drop each new masthead as it appeared.
+  #
+  # What `press` costs: exactly 5 of the 430 headlines, every one of them self-published —
+  # Microsoft's own Azure blog, Shutterstock's OpenAI press release (arriving twice, via PRN and
+  # via CO1), two law firms. That Shutterstock release is a real event, and SSTK is a real tag, so
+  # the exclusion is not free: it trades a few genuine announcements for the promotional feed
+  # they travel in. Use `all` if you want them, knowing what else comes.
+  #
+  # Two things a wider corpus does NOT fix, so read one knowing them:
+  #   SYNDICATION   one Reuters story arrives from ten sites under ten prefixes, and
+  #                 `first_occurrence` matches character for character, so it keeps all ten.
+  #                 430 distinct titles are 389 stories once prefix and casing are normalised.
+  #                 Nothing normalises them today: a wider corpus OVER-COUNTS a repeated story.
+  #   THRESHOLDS    2022 goes from 1.0M stories to 9.9M. `detect.min_mentions` is an absolute
+  #                 count and does not rescale with it; `detect.max_doc_freq` is a share and does.
+  wires: bloomberg
+
   # A manual escape hatch: exact titles to discard, applied when the corpus is joined.
   # Normally empty — `first_occurrence` already removes a title said twice, so anything listed
   # here is a title you judged worthless the first time too.

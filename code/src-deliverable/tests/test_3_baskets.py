@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import os
+from unittest.mock import patch
 
 import polars as pl
 
@@ -98,7 +99,67 @@ def the_wide_list_is_the_one_read():
     return f"held {w['ticker'].to_list()}" if w["ticker"].to_list() != ["msft"] else None
 
 
-CHECKS = [stem_stops_at_a_real_word, the_wide_list_is_the_one_read, a_company_is_not_a_substring, share_classes_take_one_slot,
+def normalization_is_shared():
+    """case, spaces, punctuation, and corporate tails normalize identically on both sides"""
+    examples = {"  eBay, INC.  ": "ebay", "Carnival Corporation & plc": "carnival",
+                "JPMorgan Chase & Co.": "jpmorgan chase", "ACME S.A.": "acme",
+                "Thomson Reuters Corp /CAN/": "thomson reuters", "AT&T Inc.": "at and t",
+                "Apple Hospitality REIT, Inc.": "apple hospitality reit"}
+    for name, expected in examples.items():
+        if uni.stem(name) != expected or uni.stem(expected) != expected:
+            return f"bad normalization: {name!r} -> {uni.stem(name)!r}"
+    if bas.matches(["Apple INC.", "Microsoft Corporation"], NAMES) != ["aapl", "msft"]:
+        return "LLM names not normalized"
+
+
+def ambiguous_issuers_are_not_bought():
+    """same normalized name and distinct CIKs is ambiguous, never first-match-wins"""
+    names = pl.DataFrame({"ticker": ["one", "two"], "company": ["Acme Inc", "Acme PLC"],
+                          "cik": [1, 2], "stem": ["acme", "acme"]})
+    w, d = bas.weights(_themes(["Acme Corporation"]), names, report=False)
+    if len(w) or d["match_status"].to_list() != ["ambiguous"]:
+        return "ambiguous issuer was bought or not recorded"
+    if d["candidate_tickers"][0].to_list() != ["one", "two"]:
+        return "ambiguity candidates missing"
+
+
+def explicit_alias_is_a_fallback_only():
+    """JPMorgan aliases to JPMorgan Chase; exact matches and ambiguities take priority"""
+    names = pl.DataFrame({"ticker": ["jpm"], "company": ["JPMorgan Chase & Co."],
+                          "cik": [1], "stem": ["outdated cache"]})
+    row = bas.resolve(["JPMorgan Inc."], names)[0]
+    if row["ticker"] != "jpm" or row["match_method"] != "alias":
+        return f"alias did not resolve: {row}"
+    extra = pl.DataFrame({"ticker": ["other"], "company": ["JPMorgan Inc."],
+                          "cik": [2], "stem": ["jpmorgan"]})
+    row = bas.resolve(["JPMorgan"], pl.concat([names, extra]))[0]
+    if row["ticker"] != "other" or row["match_method"] != "exact":
+        return "alias overrode an exact match"
+    collision = extra.with_columns(pl.lit("third").alias("ticker"), pl.lit(3).cast(pl.Int64).alias("cik"))
+    row = bas.resolve(["JPMorgan"], pl.concat([names, extra, collision]))[0]
+    if row["match_status"] != "ambiguous":
+        return "alias overrode an ambiguity"
+    collision = names.with_columns(pl.lit("otherbank").alias("ticker"), pl.lit(3).cast(pl.Int64).alias("cik"))
+    if bas.resolve(["JPMorgan"], pl.concat([names, collision]))[0]["match_status"] != "ambiguous":
+        return "ambiguous alias target was accepted"
+
+
+def normalized_matches_keep_word_provenance():
+    """normalization/aliases preserve the source word and original proposed company"""
+    names = pl.DataFrame({"ticker": ["jpm"], "company": ["JPMorgan Chase & Co."],
+                          "cik": [1], "stem": ["old stem"]})
+    with patch.object(bas, "issuers", return_value=[("bank word", "JPMorgan"), ("unknown", "Unknown Inc.")]):
+        w, d = bas.weights(_themes(["bank word", "unknown"]), names, report=False)
+    matched = d.filter(pl.col("match_status") == "matched").row(0, named=True)
+    if w["ticker"].to_list() != ["jpm"] or matched["word"] != "bank word" or matched["input_company"] != "JPMorgan":
+        return "lost source word/company"
+    if d.filter(pl.col("match_status") == "unmatched")["word"].to_list() != ["unknown"]:
+        return "unmatched proposal missing from diagnostics"
+
+
+CHECKS = [normalization_is_shared, ambiguous_issuers_are_not_bought,
+          explicit_alias_is_a_fallback_only, normalized_matches_keep_word_provenance,
+          stem_stops_at_a_real_word, the_wide_list_is_the_one_read, a_company_is_not_a_substring, share_classes_take_one_slot,
           weights_are_equal_and_sum_to_one, top_n_cuts_the_tail,
           diagnostics_name_the_word_responsible, a_brand_is_not_a_registered_name,
           the_translation_reaches_the_companies]
